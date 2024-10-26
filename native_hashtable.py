@@ -160,10 +160,10 @@ def parse_hashtable(start, end):
     print(f'offset: {hex(br.offset)}')
     print(f'virtual base: {hex(br.virtual_base)}')
     enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(br), end)
-    _next = enumerator.get_next()
-    while (_next is not None):
+    entry_parser = enumerator.get_next()
+    while (entry_parser is not None):
         print('f')
-        _next = enumerator.get_next()
+        entry_parser = enumerator.get_next()
     
     return
 
