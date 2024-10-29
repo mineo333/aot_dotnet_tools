@@ -269,7 +269,7 @@ class NativeParser:
         pos = self.offset 
         (self.offset, delta) = self.reader.DecodeSigned(self.offset)
         rel_offset = u32(pos + delta)
-        print('pos', hex(pos), 'rel offset', hex(rel_offset))
+        print('pos', hex(pos), 'delta', delta, 'rel offset', hex(rel_offset))
         return rel_offset #reader._base + _offset + delta - this offset is associated with pos
     
     def GetParserFromRelativeOffset(self):
@@ -307,12 +307,15 @@ class NativeHashTable:
         def __init__(self, table):
             self.table = table
             self.current_bucket = 0
+            #self.parser is the parser for the bucekt
+            #end_offset is the end of the the current bucket
             (self.parser, self.end_offset) = table.GetParserForBucket(self.current_bucket)
 
         def GetNext(self):
             while (True):
                 while (self.parser.offset < self.end_offset):
                     #return new binary reader from current binary reader
+                    self.parser.GetUInt8()
                     return self.parser.GetParserFromRelativeOffset()
                 if (self.current_bucket >= self.table.bucket_mask):
                     return #the default value for an object is null
@@ -334,7 +337,10 @@ class NativeHashTable:
             _end = self.reader.ReadUInt32(bucket_offset + 4)
             
         end_offset = _end + self.base_offset
-        return (NativeParser(self.reader, self.base_offset + _start), end_offset)
+        parser = NativeParser(self.reader, self.base_offset + _start)
+        print('bucket', hex(bucket), 'start', hex(_start), 'end', hex(_end))
+        print('bucket parser offset', hex(parser.offset), 'addr', hex(parser.GetAddress()), 'bucket', bucket, 'end_offset', hex(end_offset))
+        return (parser, end_offset)
 
     
             
@@ -342,10 +348,11 @@ class NativeHashTable:
 def parse_hashtable(start, end):
     reader = NativeReader(start, end-start) #create a NativeReader starting from end-start
     enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(reader, 0))) 
+    print('base offset',hex(enumerator.table.reader.base + enumerator.table.base_offset))
     entryParser = enumerator.GetNext()
     externalReferences = ExternalReferencesTable(COMMON_FIXUPS_TABLE)
     while (entryParser is not None): 
-        print('New Parser, base:', hex(entryParser.GetAddress()))
+        print('New Parser, base:', hex(entryParser.GetAddress()), 'bucket:', enumerator.current_bucket)
         #this code is pulled from here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578
         
         entryFlags = entryParser.GetUnsigned()
@@ -355,6 +362,7 @@ def parse_hashtable(start, end):
         declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
         entryMethodEntryPoint = externalReferences.GetFunctionPointerFromIndex(entryParser.GetUnsigned())
         print('entrypoint', hex(entryMethodEntryPoint))
+        
         entryParser = enumerator.GetNext() 
         
     return
