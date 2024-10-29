@@ -39,19 +39,19 @@ def initialize_types():
     else:
         print('ModuleInfoRow already exists')
 
-def p8(val):
-    return struct.pack('<B', val)
-
-def p16(val):
-    return struct.pack('<H', val)
-
-def p32(val):
-    return struct.pack('<I', val)
-
-def p64(val):
-    return struct.pack('<Q', val)
 
 
+def read8(address): 
+    return BinaryReader(bv, address).read8()  
+
+def read16(address):
+    return BinaryReader(bv, address).read16()
+
+def read32(address):
+    return BinaryReader(bv, address).read32()
+
+def read64(address):
+    return BinaryReader(bv, address).read64()
 
 def find_hashtable():
     #the objective here is to find and parse the ReadyToRun header
@@ -71,44 +71,124 @@ def find_hashtable():
         if section['SectionId'] == METHOD_TO_ENTRYPOINT_MAP_SECTION_ID:
             return (section['Start'], section['End'])
 
-# read legnth bytes and don't increment offset
-def read_no_inc(br, length):
-    ret = br.read(length)
-    br.seek_relative(-length)
-    return ret
 
-def decode_signed(br):
-    pvalue = 0
-    val = br.read8()  # Read the byte at the current offset
 
-    if ((val & 1) == 0):
-        pvalue = val >> 1
-    elif ((val & 2) == 0):
-        pvalue = (val >> 2) | br.read8() << 6
-    elif ((val & 4) == 0):
-        pvalue = (val >> 3) | br.read8() << 5 | br.read8() << 13
-    elif ((val & 8) == 0):
-        pvalue = (val >> 4) | br.read8() << 4 | br.read8() << 12 | br.read8() << 20
-    elif ((val & 16) == 0):
-        pvalue = br.read32()
-        pvalue = ctypes.c_int(pvalue).value
-    else:
-        raise ValueError("Fuck you")
+
+
+class NativeParser:
+    def __init__(self, br):
+        self.br = br #br.offset is the _offset portion of the data. In general, the offset is incremented for every byte to read. For example, in decode_unsigned, if we read 2 bytes then offset is incremented by 2 bytes. Thus, we may use the normal binary reader
+        
+        # we don't need a BinaryReader because br.offset is simply reader._base + _offset combined
+        
+    @property
+    def offset(self):
+        return self.br.offset
+    def decode_signed(self):
+        pvalue = 0
+        br = self.br
+        val = br.read8()  # Read the byte at the current offset
+
+        if ((val & 1) == 0):
+            pvalue = val >> 1
+        elif ((val & 2) == 0):
+            pvalue = (val >> 2) | br.read8() << 6
+        elif ((val & 4) == 0):
+            pvalue = (val >> 3) | br.read8() << 5 | br.read8() << 13
+        elif ((val & 8) == 0):
+            pvalue = (val >> 4) | br.read8() << 4 | br.read8() << 12 | br.read8() << 20
+        elif ((val & 16) == 0):
+            pvalue = br.read32()
+            pvalue = ctypes.c_int(pvalue).value #sign extend
+        else:
+            raise ValueError("Fuck you")
+        return pvalue
     
-    return pvalue
+    def decode_unsigned(self):
+        pvalue = 0
+        br = self.br
+        val = br.read8()  # Read the byte at the current offset
+
+        if ((val & 1) == 0):
+            pvalue = val >> 1
+        elif ((val & 2) == 0):
+            pvalue = (val >> 2) | br.read8() << 6
+        elif ((val & 4) == 0):
+            pvalue = (val >> 3) | br.read8() << 5 | br.read8() << 13
+        elif ((val & 8) == 0):
+            pvalue = (val >> 4) | br.read8() << 4 | br.read8() << 12 | br.read8() << 20
+        elif ((val & 16) == 0):
+            pvalue = br.read32()
+        else:
+            raise ValueError("Fuck you")
+        return pvalue
+    
+    def GetUInt8(self):
+        return self.br.read8()
+    
+    def GetUnsigned(self):
+        return self.decode_unsigned()
+    
+    def GetSigned(self):
+        return self.decode_signed()
+    
+    def GetRelativeOffset(self):
+        off = self.br.offset
+        delta = self.decode_signed()
+        return off + delta
+    
+    def GetParserFromRelativeOffset(self):
+        return NativeParser(BinaryReader(bv, self.GetRelativeOffset()))
+        
+    def GetUnsignedLong(self):
+        val = self.br.read8()
+        if (val & 31) != 31:
+            self.br.seek_relative(-1)
+            return self.decode_unsigned()
+        elif val & 32 == 0:
+            return self.br.read64()
+        else:
+            raise ValueError("Fuck you")
+        
+    def GetSignedLong(self):
+        val = self.br.read8()
+        if (val & 31) != 31:
+            self.br.seek_relative(-1)
+            return self.decode_signed()
+        elif val & 32 == 0:
+            return self.br.read64()
+        else:
+            raise ValueError("Fuck you")
+
+    def SkipInteger(self):
+        val = self.br.read8()
+        self.br.seek_relative(-1)
+        if (val & 1) == 0:
+            self.br.seek_relative(1)
+        elif (val & 2) == 0:
+            self.br.seek_relative(2)
+        elif (val & 4) == 0:
+            self.br.seek_relative(3)
+        elif (val & 8) == 0:
+            self.br.seek_relative(4)
+        elif (val & 16) == 0:
+            self.br.seek_relative(5)
+        elif (val & 32) == 0:
+            self.br.seek_relative(9)
+        else:
+            raise ValueError('Fuck you')
+    
+    def GetSequenceCount(self):
+        self.GetUnsigned()
    
 
-def get_relative_offset(br):
-    off = br.offset
-    delta = decode_signed(br)
-    br.seek(off + delta)
-
+#https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs#L456
 class NativeHashTable:
-    def __init__(self, br):
-        header = br.read8()
-        self.base_offset = br.offset # should this be virtual base or offset
-        self.br = br
-
+    def __init__(self, parser):
+        header = parser.GetUInt8()
+        self.base_offset = parser.offset # we don't need to create a _reader object because parser.offset is already _reader._base + _baseOffset, so when we read from an offset, we add self.base_offset + offset = _reader._base + _baseOffset + offset which is functionally what the reader does
+        
+        
         number_of_buckets_shift = header >> 2
         if (number_of_buckets_shift > 31):
             raise ValueError("Bad image format exception") 
@@ -118,52 +198,54 @@ class NativeHashTable:
         if (entry_index_size > 2):
             raise ValueError("Bad image format exception") 
         self.entry_index_size = entry_index_size
+        
     
     class AllEntriesEnumerator:
         def __init__(self, table, end_offset):
             self.table = table
             self.current_bucket = 0
-            self.parser = table.get_parser_for_bucket(self.current_bucket)
+            self.parser = table.GetParserForBucket(self.current_bucket)
             self.end_offset = end_offset
 
         def get_next(self):
             while (True):
                 while (self.parser.offset < self.end_offset):
-                    self.parser.read8()
                     #return new binary reader from current binary reader
-                    return bv.reader(self.parser.offset)# + get_relative_offset(self.parser))
+                    return self.parser.GetParserFromRelativeOffset()
                 if (self.current_bucket >= self.table.bucket_mask):
-                    return
+                    return #the default value for an object is null
                 self.current_bucket += 1
-                self.parser = self.table.get_parser_for_bucket(self.current_bucket)
-
-    def get_parser_for_bucket(self, bucket):
-            if (self.entry_index_size == 0):
-                bucket_offset = self.base_offset + bucket
-                _start = self.br.read8(bucket_offset)
-                _end = self.br.read8(bucket_offset + 1)
-            elif (self.entry_index_size == 1):
-                bucket_offset = self.base_offset + 2 * bucket
-                _start = self.br.read16(bucket_offset)
-                _end = self.br.read16(bucket_offset + 2)
-            else:
-                bucket_offset = self.base_offset + 4 * bucket
-                _start = self.br.read32(bucket_offset)
-                _end = self.br.read32(bucket_offset + 4)
+                self.parser = self.table.GetParserForBucket(self.current_bucket)
+                
+    
+    def GetParserForBucket(self, bucket):
+        if (self.entry_index_size == 0):
+            bucket_offset = self.base_offset + bucket
+            _start = read8(bucket_offset)
+            _end = read8(bucket_offset + 1)
+        elif (self.entry_index_size == 1):
+            bucket_offset = self.base_offset + 2 * bucket
+            _start = read16(bucket_offset)
+            _end = read16(bucket_offset + 2)
+        else:
+            bucket_offset = self.base_offset + 4 * bucket
+            _start = read32(bucket_offset)
+            _end = read32(bucket_offset + 4)
             
-            self.end_offset = _end + self.base_offset
-            return bv.reader(self.base_offset + _start) 
+        self.end_offset = _end + self.base_offset
+        return NativeParser(bv.reader(self.base_offset + _start))
+
+    
             
 # br will work as our native parser
 def parse_hashtable(start, end):
     br = bv.reader(start)
     print(f'offset: {hex(br.offset)}')
     print(f'virtual base: {hex(br.virtual_base)}')
-    enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(br), end)
-    _next = enumerator.get_next()
-    while (_next is not None):
-        print('f')
-        _next = enumerator.get_next()
+    enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(br)), end)
+    entryParser = enumerator.get_next()
+    while (entryParser is not None):
+        entryParser = enumerator.get_next()
     
     return
 
