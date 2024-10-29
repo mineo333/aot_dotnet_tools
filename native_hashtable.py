@@ -1,7 +1,7 @@
 from binaryninja import *
 import struct
 import ctypes
-from enum import Enum
+from enum import IntEnum
 #CONSTANTS 
 
 #pulled from: https://github.com/dotnet/runtime/blob/a3fe47ef1a8def24e8d64c305172199ae5a4ed07/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h#L10
@@ -17,7 +17,7 @@ MASK_64 = 0xffffffffffffffff
 
 
 # Pulled from: https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Runtime/MappingTableFlags.cs#L21
-class InvokeTableFlags(Enum):
+class InvokeTableFlags(IntEnum):
     HasVirtualInvoke = 0x00000001
     IsGenericMethod = 0x00000002
     HasMetadataHandle = 0x00000004
@@ -149,7 +149,7 @@ class ExternalReferencesTable:
             raise ValueError('Bad Image Format Exception')
         
         pRelPtr32 = self.elements + idx*4
-        return pRelPtr32 + read32(pRelPtr32)
+        return pRelPtr32 + s64(s32(read32(pRelPtr32)))
 
 
 #pulled from: https://github.com/dotnet/runtime/blob/cca022b6212f33adc982630ab91469882250256c/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs#L217
@@ -269,7 +269,7 @@ class NativeParser:
         pos = self.offset 
         (self.offset, delta) = self.reader.DecodeSigned(self.offset)
         rel_offset = u32(pos + delta)
-        print('pos', hex(pos), 'delta', delta, 'rel offset', hex(rel_offset))
+        #print('pos', hex(pos), 'delta', delta, 'rel offset', hex(rel_offset))
         return rel_offset #reader._base + _offset + delta - this offset is associated with pos
     
     def GetParserFromRelativeOffset(self):
@@ -338,8 +338,8 @@ class NativeHashTable:
             
         end_offset = _end + self.base_offset
         parser = NativeParser(self.reader, self.base_offset + _start)
-        print('bucket', hex(bucket), 'start', hex(_start), 'end', hex(_end))
-        print('bucket parser offset', hex(parser.offset), 'addr', hex(parser.GetAddress()), 'bucket', bucket, 'end_offset', hex(end_offset))
+        #print('bucket', hex(bucket), 'start', hex(_start), 'end', hex(_end))
+        #print('bucket parser offset', hex(parser.offset), 'addr', hex(parser.GetAddress()), 'bucket', bucket, 'end_offset', hex(end_offset))
         return (parser, end_offset)
 
     
@@ -352,7 +352,7 @@ def parse_hashtable(start, end):
     entryParser = enumerator.GetNext()
     externalReferences = ExternalReferencesTable(COMMON_FIXUPS_TABLE)
     while (entryParser is not None): 
-        print('New Parser, base:', hex(entryParser.GetAddress()), 'bucket:', enumerator.current_bucket)
+        #print('New Parser, base:', hex(entryParser.GetAddress()), 'bucket:', enumerator.current_bucket)
         #this code is pulled from here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578
         
         entryFlags = entryParser.GetUnsigned()
