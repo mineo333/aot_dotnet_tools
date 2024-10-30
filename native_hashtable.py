@@ -492,6 +492,7 @@ class RuntimeAugments:
     
     
 '''
+# pulled from: https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/TypeLoaderEnvironment.Metadata.cs#L55
 class TypeLoaderEnvironment:
     def __init__(self):
         pass
@@ -499,21 +500,24 @@ class TypeLoaderEnvironment:
     def TryGetMetadataForNamedType(runtimeTypeHandle): # return QTypeDefinition
         hashcode = runtimeTypeHandle.GetHashCode()
 
+# pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/ModuleList.cs#L36
 class NativeFormatModuleInfo:
     def __init__(self, moduleHandle, pBlob, cbBlob):
         self.MetadataReader = MetadataReader(pBlob, cbBlob)
 
+# pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
 class ScopeDefinitionHandleCollection:
     def __init__(self, reader, offset):
         self.reader = reader
         self.offset = offset
 
-    def Gount(self):
+    def Count(self):
         pass
 
     def GetEnumerator(self):
         pass
 
+pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
 class MetadataHeader:
     def __init__(self):
         self.signature = u32(0xDEADDFFD)
@@ -521,6 +525,7 @@ class MetadataHeader:
     def decode(self, reader):
         pass
 
+# pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
 class MetadataReader:
     def __init__(self, pBuffer, cbBuffer):
         # should pBuffer be cast to s8 ?
@@ -528,12 +533,14 @@ class MetadataReader:
         self.streamReader = NativeReader(s8(pBuffer), u32(cbBuffer))
         self.header = MetadataHeader()
 
+# pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/TypeLoaderEnvironment.GVMResolution.cs#L164
 def GetTypeDefinition(typeHandle):
     if (RuntimeAugments.IsGenericType(typeHandle)):
         print("generic type found")
         # would return RuntimeAugments.GetGenericDefinition(typeHandle)
     return typeHandle
 
+# pulled from: https://github.com/dotnet/runtime/blob/7d548ce3c63a7712212d6be86a2439e57cef701c/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L68
 def GetMetadataForNamedType(runtimeTypeHandle):
     assert not RuntimeAugments.IsGenericType(runtimeTypeHandle)
     qTypeDefinition = TypeLoaderEnvironment.TryGetMetadataForNamedType(runtimeTypeHandle)
