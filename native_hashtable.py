@@ -212,13 +212,16 @@ class ExternalReferencesTable:
     def GetRuntimeTypeHandleFromIndex(self, idx):
         return self.GetAddressFromIndex(idx) #update this impl if needed
     
+    def GetRuntimeTypeHandleFromIndex(idx):
+        return RuntimeAugments.CreateRuntimeTypeHandle(GetIntPtrFromIndex(idx))
+    
     def GetAddressFromIndex(self, idx):
         #in this case, we use the relative pointer version
         if idx >= self.elementsCount:
             raise ValueError('Bad Image Format Exception')
         
         pRelPtr32 = self.elements + idx*4
-        return pRelPtr32 + s64(s32(read32(pRelPtr32)))
+        return pRelPtr32 + s64(s32(read32(pRelPtr32))) 
 
 
 #pulled from: https://github.com/dotnet/runtime/blob/cca022b6212f33adc982630ab91469882250256c/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs#L217
@@ -459,20 +462,23 @@ class NativeHashTable:
         #print('bucket parser offset', hex(parser.offset), 'addr', hex(parser.GetAddress()), 'bucket', bucket, 'end_offset', hex(end_offset))
         return (parser, end_offset)
 
-'''
+#https://github.com/dotnet/runtime/blob/87fea60432fb34a2537a3a593c80042d8230b986/src/mono/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L41
 class RuntimeTypeHandle:
     def __init__(self, value):
         self.val = value
 
+    def 
     # may need to get upated
     # see: https://github.com/dotnet/runtime/blob/f11dfc95e67ca5ccb52426feda922fe9bcd7adf4/src/libraries/System.Private.CoreLib/src/System/IntPtr.cs#L90
     def GetHashCode(self):
-        return u32(self.val);
+        return u32(self.val)
 
+#https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/System.Private.CoreLib/src/Internal/Runtime/Augments/RuntimeAugments.cs#L37
 class RuntimeAugments:
-    def __init__(self):
-        pass
-
+    
+    def CreateRuntimeTypeHandle(ldTokenResult):
+        return RuntimeTypeHandle(ldTokenResult)
+    
     def IsGenericType(typeHandle):
         m_uFlags = u32(read32(typeHandle + M_UFLAGS_OFF))
         #print("flags: ", m_uFlags)
@@ -481,7 +487,9 @@ class RuntimeAugments:
 
     def GetGenericDefinition(typeHandle):
         pass
-
+    
+    
+'''
 class TypeLoaderEnvironment:
     def __init__(self):
         pass
@@ -532,22 +540,15 @@ def GetMetadataForNamedType(runtimeTypeHandle):
     return qTypeDefinition
 '''
 
+#https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3217
 class MethodHandle:
     def __init__(self, value):
-        self.hType = HandleType(value >> 24)
         assert self.hType == 0 or self.hType == HandleType.Method or self.hType == HandleType.Null
-        self.value = (value & 0x00FFFFFF) | (int(HandleType.Method) << 24)
+        self.value = (value & 0x00FFFFFF) | (HandleType.Method << 24)
 
 # MAIN PARSING CODE STARTS HERE
             
-#this is a list of tuples that map the 
-_ldftnReverseLookup_InvokeMap = list()         
-
-#pulled from: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578, this basically fills _ldftnReverseLookup_InvokeMap
-#NOTE: actually setting _ldftnReverseLookup_InvokeMap is done here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L498C17-L498C46
-def ComputeLdftnReverseLookup_InvokeMap(invokeMapReader):
-    enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(invokeMapReader, 0)))
-    entryParser = enumerator.GetNext()
+#
 
 # br will work as our native parser
 def parse_hashtable(invokeMapStart, invokeMapEnd):
@@ -591,3 +592,8 @@ print('__method_entrypoint_map start:', hex(start), 'end:', hex(end))
 parse_hashtable(start, end)
 
 
+
+
+
+#pulled from: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578, this basically fills _ldftnReverseLookup_InvokeMap
+#NOTE: actually setting _ldftnReverseLookup_InvokeMap is done here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L498C17-L498C46
