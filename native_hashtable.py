@@ -532,11 +532,21 @@ def GetMetadataForNamedType(runtimeTypeHandle):
     return qTypeDefinition
 '''
 
+# pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
 class MethodHandle:
     def __init__(self, value):
-        self.hType = HandleType(value >> 24)
-        assert self.hType == 0 or self.hType == HandleType.Method or self.hType == HandleType.Null
-        self.value = (value & 0x00FFFFFF) | (int(HandleType.Method) << 24)
+        self._hType = HandleType(value >> 24)
+        assert self._hType == 0 or self._hType == HandleType.Method or self._hType == HandleType.Null
+        self._value = (value & 0x00FFFFFF) | (HandleType.Method << 24)
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def hType(self):
+        return self._hType
+
 
 # MAIN PARSING CODE STARTS HERE
             
@@ -577,8 +587,7 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
             if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
                 #declaringTypeHandleDefinition = GetTypeDefinition(declaringTypeHandle)
                 #qTypeDefinition = None
-                nativeFormatMethodHandle = (HandleType.Method << 24) | (MethodHandle(entryMethodHandleOrNameAndSigRaw))
-                print('nativeFormatMethodHandle: ', nativeFormatMethodHandle)
+                nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
 
         entryParser = enumerator.GetNext() 
         
