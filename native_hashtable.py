@@ -64,7 +64,7 @@ def initialize_types():
     else:
         print('ModuleInfoRow already exists')
 
-
+#THIS READER IS ALWAYS USED TO READ ABSOLUTE ADDRESSES
 READER = bv.reader(0)
 
 #TODO: Change this so that we are not allocating objects every time 
@@ -127,7 +127,9 @@ def find_section_start_end(section_id):
         if section['SectionId'] == section_id:
             return (section['Start'], section['End'])
         
-        
+
+#BELOW THIS ARE THE NATIVE FORMAT HELPERS
+
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/Common/src/Internal/Runtime/TypeLoader/ExternalReferencesTable.cs#L15
 class ExternalReferencesTable:
     def __init__(self, section_id):
@@ -276,6 +278,7 @@ class NativeParser:
         return NativeParser(self.reader, self.GetRelativeOffset())
 
     def SkipInteger(self):
+        print('skip', hex(self.reader.base + self.offset))
         self.offset = self.reader.SkipInteger(self.offset)
     
     def GetAddress(self):
@@ -343,10 +346,13 @@ class NativeHashTable:
         return (parser, end_offset)
 
     
+# MAIN PARSING CODE STARTS HERE
             
+_ldftnReverseLookup_InvokeMap = list()         
+
 # br will work as our native parser
-def parse_hashtable(start, end):
-    reader = NativeReader(start, end-start) #create a NativeReader starting from end-start
+def parse_hashtable(invokeMapStart, invokeMapEnd):
+    reader = NativeReader(invokeMapStart, invokeMapEnd-invokeMapStart) #create a NativeReader starting from end-start
     enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(reader, 0))) 
     print('base offset',hex(enumerator.table.reader.base + enumerator.table.base_offset))
     entryParser = enumerator.GetNext()
@@ -354,15 +360,18 @@ def parse_hashtable(start, end):
     while (entryParser is not None): 
         #print('New Parser, base:', hex(entryParser.GetAddress()), 'bucket:', enumerator.current_bucket)
         #this code is pulled from here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578
+        # as well as from here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L643
+        
         
         entryFlags = entryParser.GetUnsigned()
-        #if entryFlags & int(InvokeTableFlags.HasEntrypoint) == 0:
-        #    continue
-        entryParser.SkipInteger()
-        declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
-        entryMethodEntryPoint = externalReferences.GetFunctionPointerFromIndex(entryParser.GetUnsigned())
-        print('entrypoint', hex(entryMethodEntryPoint))
-        
+        if entryFlags & int(InvokeTableFlags.HasEntrypoint) != 0:
+            #entryParser.SkipInteger()
+            name = entryParser.GetUnsigned()
+            print('name', hex(name))
+            declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
+            entryMethodEntryPoint = externalReferences.GetFunctionPointerFromIndex(entryParser.GetUnsigned())
+            print('entrypoint', hex(entryMethodEntryPoint))
+
         entryParser = enumerator.GetNext() 
         
     return
