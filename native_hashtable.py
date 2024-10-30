@@ -287,11 +287,59 @@ class NativeParser:
    
 
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs#L456
+
+'''
+The rough structure of a NativeHashTable is as follows:
+
+[header][bucket offsets][data]
+
+The header is essentially contains core data including number of buckets and the size of bucket offsets.
+
+In a NativeHashtable, an important constant is: base_offset. base_offset is always the offset of the first byte of [bucket offsets]
+
+The number of buckets is 2**number_of_buckets_shift in the header 
+
+Each bucket offset can either be 1, 2, or 4 bytes (In the case of Flare-On it is 2). This is determined by the entry_index_size in the header.
+
+The [bucket offsets] section is an array of bucket offsets. We essentially use a sliding window to determine the start and end of each bucket. For example, support bucket offsets is: {0x0, 0x10, 0x20, 0x30}
+
+Then, the start/end of bucket 0 is (0, 0x10), the start/end of bucket 1 is (0x10, 0x20), etc.
+
+
+We then add the start of the bucket to base_offset and that serves as the array of offsets for each element in that bucket. Each offset in that array is a relative offset (Meaning it is calculated with DecodeSigned + offset). Each offset is seperated by a seperator byte.
+
+This is where AllEntriesEnumerator::parser comes in. The parser, is the NativeParser is the thing that decodes all those relative offsets and generates a new parser (Using GetParserFromRelativeOffset) that can then be used to view that specific element. 
+
+The high level description of NativeHashtable can be seen below
+
+                  +--------+                                                          
+                  |        |                                                          
+                  |        |<------|                                                  
+                  |        |       |                                                  
+                  +--------+       |<------ Each element offset points to an element. New parser is created  
+                  |        |       |                                                  
+                  |        |       |                                                  
+                  |        |-------+                                                  
+                  |        |                                                          
+                  |--------|<----------|                                              
+                  |        |           |                                              
+                  |        |           |                                              
+                  |        |           |<------Bucket offset points to element offsets. New parser is created
+                  |        |           |                                              
+     Data  -----> +--------+           |                                              
+                  |        |           |                                              
+                  |        |-----------+                                              
+                  |        |                                                          
+                  |        |                                                          
+                  |        |                                                          
+                  +--------+<-----Bucket offsets                                      
+                  +--------+<-----Header Byte                                         
+'''
 class NativeHashTable:
-    def __init__(self, parser): 
+    def __init__(self, parser): #the parser should point to the header byte of the NativeHashtable
         header = parser.GetUInt8()
-        self.base_offset = parser.offset 
-        self.reader = parser.reader
+        self.base_offset = parser.offset #base offset is the offset where the NativeHashtable starts (header+1)
+        self.reader = parser.reader #reader associated with this section
         
         
         number_of_buckets_shift = header >> 2
@@ -310,15 +358,16 @@ class NativeHashTable:
         def __init__(self, table):
             self.table = table
             self.current_bucket = 0
-            #self.parser is the parser for the bucekt
+            #self.parser is the parser for the bucket
             #end_offset is the end of the the current bucket
             (self.parser, self.end_offset) = table.GetParserForBucket(self.current_bucket)
 
+        #get next basically 
         def GetNext(self):
             while (True):
                 while (self.parser.offset < self.end_offset):
-                    #return new binary reader from current binary reader
-                    self.parser.GetUInt8()
+                    
+                    self.parser.GetUInt8() #Seperator byte?
                     return self.parser.GetParserFromRelativeOffset()
                 if (self.current_bucket >= self.table.bucket_mask):
                     return #the default value for an object is null
@@ -348,21 +397,23 @@ class NativeHashTable:
     
 # MAIN PARSING CODE STARTS HERE
             
+#this is a list of tuples that map the 
 _ldftnReverseLookup_InvokeMap = list()         
+
+#pulled from: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578, this basically fills _ldftnReverseLookup_InvokeMap
+#NOTE: actually setting _ldftnReverseLookup_InvokeMap is done here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L498C17-L498C46
+def ComputeLdftnReverseLookup_InvokeMap(invokeMapReader):
+    enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(invokeMapReader, 0)))
+    entryParser = enumerator.GetNext()
 
 # br will work as our native parser
 def parse_hashtable(invokeMapStart, invokeMapEnd):
     reader = NativeReader(invokeMapStart, invokeMapEnd-invokeMapStart) #create a NativeReader starting from end-start
     enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(reader, 0))) 
-    print('base offset',hex(enumerator.table.reader.base + enumerator.table.base_offset))
+    
     entryParser = enumerator.GetNext()
     externalReferences = ExternalReferencesTable(COMMON_FIXUPS_TABLE)
     while (entryParser is not None): 
-        #print('New Parser, base:', hex(entryParser.GetAddress()), 'bucket:', enumerator.current_bucket)
-        #this code is pulled from here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578
-        # as well as from here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L643
-        
-        
         entryFlags = entryParser.GetUnsigned()
         if entryFlags & int(InvokeTableFlags.HasEntrypoint) != 0:
             #entryParser.SkipInteger()
