@@ -212,8 +212,8 @@ class ExternalReferencesTable:
     def GetRuntimeTypeHandleFromIndex(self, idx):
         return self.GetAddressFromIndex(idx) #update this impl if needed
     
-    def GetRuntimeTypeHandleFromIndex(idx):
-        return RuntimeAugments.CreateRuntimeTypeHandle(GetIntPtrFromIndex(idx))
+    def GetRuntimeTypeHandleFromIndex(self, idx):
+        return RuntimeAugments.CreateRuntimeTypeHandle(self.GetIntPtrFromIndex(idx))
     
     def GetAddressFromIndex(self, idx):
         #in this case, we use the relative pointer version
@@ -466,12 +466,14 @@ class NativeHashTable:
 class RuntimeTypeHandle:
     def __init__(self, value):
         self.val = value
-
-    def 
+        
     # may need to get upated
     # see: https://github.com/dotnet/runtime/blob/f11dfc95e67ca5ccb52426feda922fe9bcd7adf4/src/libraries/System.Private.CoreLib/src/System/IntPtr.cs#L90
     def GetHashCode(self):
         return u32(self.val)
+    
+    def __str__(self):
+        return hex(self.val)
 
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/System.Private.CoreLib/src/Internal/Runtime/Augments/RuntimeAugments.cs#L37
 class RuntimeAugments:
@@ -569,7 +571,7 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
     externalReferences = ExternalReferencesTable(COMMON_FIXUPS_TABLE)
     while (entryParser is not None): 
         entryFlags = entryParser.GetUnsigned()
-        if entryFlags & int(InvokeTableFlags.HasEntrypoint) != 0:
+        if entryFlags & InvokeTableFlags.HasEntrypoint != 0:
             #entryParser.SkipInteger()
 
             entryMethodHandleOrNameAndSigRaw = entryParser.GetUnsigned()
@@ -578,11 +580,11 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
             entryMethodEntryPoint = externalReferences.GetFunctionPointerFromIndex(entryParser.GetUnsigned())
             print('entryMethodEntryPoint', hex(entryMethodEntryPoint))
 
-            if entryFlags & int(InvokeTableFlags.NeedsParameterInterpretation) != 0:
+            if entryFlags & InvokeTableFlags.NeedsParameterInterpretation != 0:
                 entryParser.SkipInteger()
 
-            declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
-            print('declaringTypeHandle', hex(declaringTypeHandle))
+            declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryDeclaringTypeRaw)
+            print('declaringTypeHandle', declaringTypeHandle)
            
             # reference: https://github.com/dotnet/runtime/blob/c43fc8966036678d8d603bdfbd1afd79f45b420b/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L716C48-L716C65
             if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
