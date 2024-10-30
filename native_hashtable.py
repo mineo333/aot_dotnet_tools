@@ -543,8 +543,6 @@ class MethodHandle:
 #this is a list of tuples that map the 
 _ldftnReverseLookup_InvokeMap = list()         
 
-<<<<<<< HEAD
-=======
 #pulled from: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578, this basically fills _ldftnReverseLookup_InvokeMap
 #NOTE: actually setting _ldftnReverseLookup_InvokeMap is done here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L498C17-L498C46
 def ComputeLdftnReverseLookup_InvokeMap(invokeMapReader):
@@ -552,7 +550,6 @@ def ComputeLdftnReverseLookup_InvokeMap(invokeMapReader):
     entryParser = enumerator.GetNext()
 
 # br will work as our native parser
->>>>>>> 9f180eb2d4de9e34665c294c7d9c2c2258421661
 def parse_hashtable(invokeMapStart, invokeMapEnd):
     reader = NativeReader(invokeMapStart, invokeMapEnd-invokeMapStart) #create a NativeReader starting from end-start
     enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(reader, 0))) 
