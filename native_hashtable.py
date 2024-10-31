@@ -171,6 +171,8 @@ def initialize_types():
 #THIS READER IS ALWAYS USED TO READ ABSOLUTE ADDRESSES
 READER = bv.reader(0)
 
+METADATA_READER = None
+
 #TODO: Change this so that we are not allocating objects every time 
 def read8(address): 
     global READER
@@ -610,7 +612,7 @@ class TypeLoaderEnvironment:
                 entryMetadataHandle = Handle(entryParser.GetUnsigned())
                 # I think we can just pass entryMetadataHandle directly into HandleType
                 # https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L107
-                if entryMetadataHandle.HandleTyp == HandleType.TypeDefinition:
+                if entryMetadataHandle.HandleType == HandleType.TypeDefinition:
                     metadataReader = NativeReader() # TODO: find offsets for this NativeReader
                     return QTypeDefinition(metadataReader, entryMetadataHandle)
                     
@@ -638,8 +640,13 @@ class MethodHandle:
 
 # MAIN PARSING CODE STARTS HERE
             
-
-# br will work as our native parser
+            
+#The metadata reader is created here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/ModuleList.cs#L273
+def create_metadata_reader(): 
+    global METADATA_READER
+    (metadata_start, metadata_end) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)  
+    metadataNativeReader = NativeReader(metadata_start, metadata_end-metadata_start)
+    
 
 #this comes from here: https://github.com/dotnet/runtime/blob/c43fc8966036678d8d603bdfbd1afd79f45b420b/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L643
 def parse_hashtable(invokeMapStart, invokeMapEnd):
