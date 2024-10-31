@@ -613,7 +613,7 @@ class TypeLoaderEnvironment:
                 # I think we can just pass entryMetadataHandle directly into HandleType
                 # https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L107
                 if entryMetadataHandle.HandleType == HandleType.TypeDefinition:
-                    metadataReader = NativeReader() # TODO: find offsets for this NativeReader
+                    metadataReader = NativeReader() # Change this to a MetadataReader
                     return QTypeDefinition(metadataReader, entryMetadataHandle)
                     
 
@@ -637,6 +637,57 @@ class MethodHandle:
     def hType(self):
         return self._hType
 
+# pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
+class ScopeDefinitionHandleCollection:
+    def __init__(self, reader, offset):
+        self.reader = reader
+        self.offset = offset
+
+    def Count(self):
+        pass
+
+    def GetEnumerator(self):
+        pass
+
+# pulled from: https://github.com/dotnet/runtime/blob/6ac8d055a200ccca0d6fa8604c18578234dffa94/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
+class MetadataHeader:
+    SIGNATURE = u32(0xDEADDFFD)
+
+    SCOPE_DEFINITIONS = None
+
+    # Decode defintion was found in the assembly
+    def Decode(self, reader):
+        if reader.ReadUint32(0) != self.SIGNATURE:
+            raise ValueError("Bad Image Format Exception")
+        (offset, n) = reader.DecodeUnsigned()
+        for _ in range(n):
+            offset = reader.SkipInteger(offset)
+        self.SCOPE_DEFINITIONS = ScopeDefinitionHandleCollection(reader, offset)
+
+
+# pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
+class MetadataReader:
+    def __init__(self, pBuffer, cbBuffer):
+        self.streamReader = NativeReader(pBuffer, u32(cbBuffer))
+        self.header = MetadataHeader()
+        self.header.Decode(self.streamReader)
+
+        @property
+        def ScopeDefinitions():
+            return self.header.SCOPE_DEFINITIONS
+        
+        @property
+        def NullHandle():
+            return Handle(HandleType.Null << 24)
+
+        def isNull(self, handle):
+            return handle.value == NullHandle.value
+
+        def ToHandle(self, handle):
+            return handle  
+
+        def StringEquals(self, handle, value):
+            pass
 
 # MAIN PARSING CODE STARTS HERE
             
@@ -703,33 +754,7 @@ class NativeFormatModuleInfo:
     def __init__(self, moduleHandle, pBlob, cbBlob):
         self.MetadataReader = MetadataReader(pBlob, cbBlob)
 
-# pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
-class ScopeDefinitionHandleCollection:
-    def __init__(self, reader, offset):
-        self.reader = reader
-        self.offset = offset
 
-    def Count(self):
-        pass
-
-    def GetEnumerator(self):
-        pass
-
-pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
-class MetadataHeader:
-    def __init__(self):
-        self.signature = u32(0xDEADDFFD)
-
-    def decode(self, reader):
-        pass
-
-# pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
-class MetadataReader:
-    def __init__(self, pBuffer, cbBuffer):
-        # should pBuffer be cast to s8 ?
-        # see: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L171
-        self.streamReader = NativeReader(s8(pBuffer), u32(cbBuffer))
-        self.header = MetadataHeader()
 
 # pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/TypeLoaderEnvironment.GVMResolution.cs#L164
 def GetTypeDefinition(typeHandle):
