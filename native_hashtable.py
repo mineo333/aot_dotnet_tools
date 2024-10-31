@@ -610,17 +610,15 @@ class TypeLoaderEnvironment:
             foundType = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
             if foundType == runtimeTypeHandle:
                 entryMetadataHandle = Handle(entryParser.GetUnsigned())
-                # I think we can just pass entryMetadataHandle directly into HandleType
-                # https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L107
                 if entryMetadataHandle.HandleType == HandleType.TypeDefinition:
                     metadataReader = NativeReader() # Change this to a MetadataReader
                     return QTypeDefinition(metadataReader, entryMetadataHandle)
                     
-
+# pulled from: https://github.com/dotnet/runtime/blob/6ac8d055a200ccca0d6fa8604c18578234dffa94/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L39
 class QTypeDefinition:
     def __init__(self, reader, handle):
         self.reader = reader
-        self.handle = handle #int
+        self.handle = handle.AsInt()
 
 # pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
 class MethodHandle:
