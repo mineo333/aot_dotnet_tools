@@ -587,15 +587,25 @@ class TypeLoaderEnvironment:
         typeMapReader = NativeReader(typeMapStart, typeMapEnd-typeMapStart)
         typeMapParser = NativeParser(typeMapReader, 0)
         typeMapHashtable = NativeHashTable(typeMapParser)
-        commonFixupsTable = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
+        externalReferences = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
         
         lookup = typeMapHashtable.Lookup(hashcode)
         entryParser = lookup.GetNext()
         while entryParser is not None:
             foundType = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
             if foundType == runtimeTypeHandle:
-                pass
+                entryMetadataHandle = entryParser.GetUnsigned()
+                # I think we can just pass entryMetadataHandle directly into HandleType
+                # https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L107
+                if HandleType(entryMetadataHandle) == HandleType.TypeDefinition:
+                    metadataReader = NativeReader() # TDOD: find offsets for this NativeReader
+                    return QTypeDefinition(metadataReader, entryMetadataHandle)
+                    
 
+class QTypeDefinition:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle #int
 
 # pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
 class MethodHandle:
