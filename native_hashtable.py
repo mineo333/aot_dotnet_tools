@@ -535,9 +535,10 @@ class RuntimeTypeHandle:
         
     # may need to get updated
     # see: https://github.com/dotnet/runtime/blob/f11dfc95e67ca5ccb52426feda922fe9bcd7adf4/src/libraries/System.Private.CoreLib/src/System/IntPtr.cs#L90
-    def GetHashCode(self):
-        return u32(self.val)
     
+    def GetHashCode(self):
+        return self.__hash__()
+
     def __str__(self):
         return hex(self.val)
     
@@ -545,9 +546,9 @@ class RuntimeTypeHandle:
         if isinstance(other, RuntimeTypeHandle):
             return self.value == other.value
         return False
-    
+    #you can see this in the disassembly for #TryGetMetadataForNamedType
     def __hash__(self):
-        return 0
+        return read32(self.val + 20)
 
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/System.Private.CoreLib/src/Internal/Runtime/Augments/RuntimeAugments.cs#L37
 class RuntimeAugments:
@@ -567,6 +568,7 @@ class RuntimeAugments:
 #https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L35
 class ExecutionEnvironmentImplementation:
     def GetMetadataForNamedType(runtimeTypeHandle):
+        #calls TryGetMetadataForNamedType
         pass
     
     def GetTypeDefinition(typeHandle):
