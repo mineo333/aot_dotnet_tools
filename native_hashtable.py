@@ -526,7 +526,18 @@ class NativeHashTable:
         (parser, end_offset) = self.GetParserForBucket(bucket)
         
         return Enumerator(parser, end_offset, u8(bucket))
-        
+
+class Handle:
+    def __init__(self, value):
+        self.value = value
+    
+    @property
+    def HandleType(self):
+        return HandleType(self.value >> 24)
+    
+    @property
+    def Offset(self):
+        return self.value & 0xffffff     
 
 #https://github.com/dotnet/runtime/blob/87fea60432fb34a2537a3a593c80042d8230b986/src/mono/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L41
 class RuntimeTypeHandle:
@@ -596,11 +607,11 @@ class TypeLoaderEnvironment:
         while entryParser is not None:
             foundType = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
             if foundType == runtimeTypeHandle:
-                entryMetadataHandle = entryParser.GetUnsigned()
+                entryMetadataHandle = Handle(entryParser.GetUnsigned())
                 # I think we can just pass entryMetadataHandle directly into HandleType
                 # https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L107
-                if HandleType(entryMetadataHandle) == HandleType.TypeDefinition:
-                    metadataReader = NativeReader() # TDOD: find offsets for this NativeReader
+                if entryMetadataHandle.HandleTyp == HandleType.TypeDefinition:
+                    metadataReader = NativeReader() # TODO: find offsets for this NativeReader
                     return QTypeDefinition(metadataReader, entryMetadataHandle)
                     
 
@@ -697,7 +708,7 @@ class ScopeDefinitionHandleCollection:
     def GetEnumerator(self):
         pass
 
-pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
+pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
 class MetadataHeader:
     def __init__(self):
         self.signature = u32(0xDEADDFFD)
