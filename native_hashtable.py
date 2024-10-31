@@ -715,7 +715,7 @@ class ScopeDefinitionHandleCollection:
     def GetEnumerator(self):
         pass
 
-pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
+pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
 class MetadataHeader:
     def __init__(self):
         self.signature = u32(0xDEADDFFD)
