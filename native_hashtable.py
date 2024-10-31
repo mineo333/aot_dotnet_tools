@@ -8,10 +8,47 @@ from enum import IntEnum
 READY_TO_RUN_SIG = b'\x52\x54\x52\x00'
 
 #pulled from: https://github.com/dotnet/runtime/blob/cca022b6212f33adc982630ab91469882250256c/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs#L6 - Note that 300 is added to all these numbers
-METHOD_TO_ENTRYPOINT_MAP_SECTION_ID = 306
 
-#pulled from: https://github.com/dotnet/runtime/blob/cca022b6212f33adc982630ab91469882250256c/src/coreclr/tools/Common/Internal/Runtime/MetadataBlob.cs#L6 - Note that 300 is added to all these numbers
-COMMON_FIXUPS_TABLE = 308
+class ReflectionMapBlob(IntEnum):
+    TypeMap                                     = 301
+    ArrayMap                                    = 302
+    PointerTypeMap                              = 303
+    FunctionPointerTypeMap                      = 304
+#    // unused                                   = 5,
+#__method_to_entrypoint_map
+    InvokeMap                                   = 306
+    VirtualInvokeMap                            = 307
+    CommonFixupsTable                           = 308
+    FieldAccessMap                              = 39
+    CCtorContextMap                             = 310
+    ByRefTypeMap                                = 311
+#   unused                                   = 12,
+    EmbeddedMetadata                            = 313
+#    // Unused                                   = 14,
+    UnboxingAndInstantiatingStubMap             = 315
+    StructMarshallingStubMap                    = 316
+    DelegateMarshallingStubMap                  = 317
+    GenericVirtualMethodTable                   = 318
+    InterfaceGenericVirtualMethodTable          = 319
+
+#    // Reflection template types/methods blobs:
+    TypeTemplateMap                             = 321
+    GenericMethodsTemplateMap                   = 322
+#    // unused                                   = 23,
+    BlobIdResourceIndex                         = 324
+    BlobIdResourceData                          = 325
+    BlobIdStackTraceEmbeddedMetadata            = 326
+    BlobIdStackTraceMethodRvaToTokenMapping     = 327
+
+#    //Native layout blobs:
+    NativeLayoutInfo                            = 330
+    NativeReferences                            = 331
+    GenericsHashtable                           = 332
+    NativeStatics                               = 333
+    StaticsInfoHashtable                        = 334
+    GenericMethodsHashtable                     = 335
+    ExactMethodInstantiationsHashtable          = 336
+
 
 MASK_64 = 0xffffffffffffffff
 
@@ -193,6 +230,7 @@ def find_section_start_end(section_id):
     for section in sections:
         if section['SectionId'] == section_id:
             return (section['Start'], section['End'])
+    raise ValueError('Could not find section', section_id)
         
 
 #BELOW THIS ARE THE NATIVE FORMAT HELPERS
@@ -375,7 +413,7 @@ The [bucket offsets] section is an array of bucket offsets. We essentially use a
 Then, the start/end of bucket 0 is (0, 0x10), the start/end of bucket 1 is (0x10, 0x20), etc.
 
 
-We then add the start of the bucket to base_offset and that serves as the array of offsets for each element in that bucket. Each offset in that array is a relative offset (Meaning it is calculated with DecodeSigned + offset). Each offset is seperated by a seperator byte.
+We then add the start of the bucket to base_offset and that serves as the array of offsets for each element in that bucket. Each offset in that array is a relative offset (Meaning it is calculated with DecodeSigned + offset). Each offset is seperated by the "low hashcode" of that object (First byte of the hashcode)
 
 This is where AllEntriesEnumerator::parser comes in. The parser, is the NativeParser is the thing that decodes all those relative offsets and generates a new parser (Using GetParserFromRelativeOffset) that can then be used to view that specific element. 
 
@@ -435,12 +473,33 @@ class NativeHashTable:
             while (True):
                 while (self.parser.offset < self.end_offset):
                     
-                    self.parser.GetUInt8() #Seperator byte?
+                    self.parser.GetUInt8() #skip hashcode
                     return self.parser.GetParserFromRelativeOffset()
                 if (self.current_bucket >= self.table.bucket_mask):
                     return #the default value for an object is null
                 self.current_bucket += 1
                 (self.parser, self.end_offset) = self.table.GetParserForBucket(self.current_bucket)
+    
+    class Enumerator:
+        def __init__(self, parser, end_offset, low_hashcode):
+            self.parser = parser
+            self.end_offset = end_offset
+            self.low_hashcode = low_hashcode
+        
+        def GetNext(self):
+            while(parser.offset < self.end_offset):
+                low_hashcode = parser.GetUInt8()
+                
+                if low_hashcode == self.low_hashcode:
+                    return parser.GetParserFromRelativeOffset()
+                
+                if low_hashcode > self.low_hashcode:
+                    self.end_offset = parser.offset
+                    break
+            
+                parser.SkipInteger() #skip past the current offset
+            return None
+        
     
     def GetParserForBucket(self, bucket): #returns the NativeParser and the endOffset
         if (self.entry_index_size == 0):
@@ -462,18 +521,33 @@ class NativeHashTable:
         #print('bucket parser offset', hex(parser.offset), 'addr', hex(parser.GetAddress()), 'bucket', bucket, 'end_offset', hex(end_offset))
         return (parser, end_offset)
 
+    def Lookup(self, hashcode):
+        bucket = (u32(hashcode) >> 8) & self.bucket_mask
+        (parser, end_offset) = self.GetParserForBucket(bucket)
+        
+        return Enumerator(parser, end_offset, u8(bucket))
+        
+
 #https://github.com/dotnet/runtime/blob/87fea60432fb34a2537a3a593c80042d8230b986/src/mono/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L41
 class RuntimeTypeHandle:
     def __init__(self, value):
         self.val = value
         
-    # may need to get upated
+    # may need to get updated
     # see: https://github.com/dotnet/runtime/blob/f11dfc95e67ca5ccb52426feda922fe9bcd7adf4/src/libraries/System.Private.CoreLib/src/System/IntPtr.cs#L90
     def GetHashCode(self):
         return u32(self.val)
     
     def __str__(self):
         return hex(self.val)
+    
+    def __eq__(self, other):
+        if isinstance(other, RuntimeTypeHandle):
+            return self.value == other.value
+        return False
+    
+    def __hash__(self):
+        return 0
 
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/System.Private.CoreLib/src/Internal/Runtime/Augments/RuntimeAugments.cs#L37
 class RuntimeAugments:
@@ -485,21 +559,115 @@ class RuntimeAugments:
         m_uFlags = u32(read32(typeHandle + M_UFLAGS_OFF))
         #print("flags: ", m_uFlags)
         # check for generic type
-        return int(m_uFlags) & 0x02000000 != 0
+        return m_uFlags & 0x02000000 != 0
 
     def GetGenericDefinition(typeHandle):
         pass
+
+#https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L35
+class ExecutionEnvironmentImplementation:
+    def GetMetadataForNamedType(runtimeTypeHandle):
+        pass
     
+    def GetTypeDefinition(typeHandle):
+        if (RuntimeAugments.IsGenericType(typeHandle)):
+            raise ValueError('Cannot handle generic type')
+        return typeHandle
     
-'''
+
 # pulled from: https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/TypeLoaderEnvironment.Metadata.cs#L55
 class TypeLoaderEnvironment:
     def __init__(self):
         pass
 
     def TryGetMetadataForNamedType(runtimeTypeHandle): # return QTypeDefinition
+        #note we only use the current module
         hashcode = runtimeTypeHandle.GetHashCode()
+        (typeMapStart, typeMapEnd) = find_section_start_end(ReflectionMapBlob.TypeMap)
+        typeMapReader = NativeReader(typeMapStart, typeMapEnd-typeMapStart)
+        typeMapParser = NativeParser(typeMapReader, 0)
+        typeMapHashtable = NativeHashTable(typeMapParser)
+        commonFixupsTable = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
+        
+        lookup = typeMapHashtable.Lookup(hashcode)
+        entryParser = lookup.GetNext()
+        while entryParser is not None:
+            foundType = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
+            if foundType == runtimeTypeHandle:
+                pass
 
+
+# pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
+class MethodHandle:
+    def __init__(self, value):
+        self._hType = HandleType(value >> 24)
+        assert self._hType == 0 or self._hType == HandleType.Method or self._hType == HandleType.Null
+        self._value = (value & 0x00FFFFFF) | (HandleType.Method << 24)
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def hType(self):
+        return self._hType
+
+
+# MAIN PARSING CODE STARTS HERE
+            
+
+# br will work as our native parser
+
+#this comes from here: https://github.com/dotnet/runtime/blob/c43fc8966036678d8d603bdfbd1afd79f45b420b/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L643
+def parse_hashtable(invokeMapStart, invokeMapEnd):
+    reader = NativeReader(invokeMapStart, invokeMapEnd-invokeMapStart) #create a NativeReader starting from end-start
+    enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(reader, 0))) 
+    
+    entryParser = enumerator.GetNext()
+    externalReferences = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
+    while (entryParser is not None): 
+        entryFlags = entryParser.GetUnsigned()
+        if entryFlags & InvokeTableFlags.HasEntrypoint != 0:
+            #entryParser.SkipInteger()
+
+            entryMethodHandleOrNameAndSigRaw = entryParser.GetUnsigned()
+            entryDeclaringTypeRaw = entryParser.GetUnsigned()
+
+            entryMethodEntryPoint = externalReferences.GetFunctionPointerFromIndex(entryParser.GetUnsigned())
+            print('entryMethodEntryPoint', hex(entryMethodEntryPoint))
+
+            if entryFlags & InvokeTableFlags.NeedsParameterInterpretation != 0:
+                entryParser.SkipInteger()
+
+            declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryDeclaringTypeRaw)
+            print('declaringTypeHandle', declaringTypeHandle)
+           
+            if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
+                #declaringTypeHandleDefinition = GetTypeDefinition(declaringTypeHandle)
+                #qTypeDefinition = None
+                nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
+
+        entryParser = enumerator.GetNext() 
+        
+    return
+
+initialize_types()
+initialize_rtr()
+(start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
+print('__method_entrypoint_map start:', hex(start), 'end:', hex(end))
+parse_hashtable(start, end)
+
+
+
+
+
+#pulled from: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578, this basically fills _ldftnReverseLookup_InvokeMap
+#NOTE: actually setting _ldftnReverseLookup_InvokeMap is done here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L498C17-L498C46
+
+
+
+
+'''
 # pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/ModuleList.cs#L36
 class NativeFormatModuleInfo:
     def __init__(self, moduleHandle, pBlob, cbBlob):
@@ -540,78 +708,4 @@ def GetTypeDefinition(typeHandle):
         # would return RuntimeAugments.GetGenericDefinition(typeHandle)
     return typeHandle
 
-# pulled from: https://github.com/dotnet/runtime/blob/7d548ce3c63a7712212d6be86a2439e57cef701c/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L68
-def GetMetadataForNamedType(runtimeTypeHandle):
-    assert not RuntimeAugments.IsGenericType(runtimeTypeHandle)
-    qTypeDefinition = TypeLoaderEnvironment.TryGetMetadataForNamedType(runtimeTypeHandle)
-    if not qTypeDefinition:
-        raise ValueError("This should be unreachable except for a compiler error")
-    return qTypeDefinition
 '''
-
-# pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
-class MethodHandle:
-    def __init__(self, value):
-        self._hType = HandleType(value >> 24)
-        assert self._hType == 0 or self._hType == HandleType.Method or self._hType == HandleType.Null
-        self._value = (value & 0x00FFFFFF) | (HandleType.Method << 24)
-
-    @property
-    def value(self):
-        return self._value
-
-    @property
-    def hType(self):
-        return self._hType
-
-
-# MAIN PARSING CODE STARTS HERE
-            
-#
-
-# br will work as our native parser
-def parse_hashtable(invokeMapStart, invokeMapEnd):
-    reader = NativeReader(invokeMapStart, invokeMapEnd-invokeMapStart) #create a NativeReader starting from end-start
-    enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(reader, 0))) 
-    
-    entryParser = enumerator.GetNext()
-    externalReferences = ExternalReferencesTable(COMMON_FIXUPS_TABLE)
-    while (entryParser is not None): 
-        entryFlags = entryParser.GetUnsigned()
-        if entryFlags & InvokeTableFlags.HasEntrypoint != 0:
-            #entryParser.SkipInteger()
-
-            entryMethodHandleOrNameAndSigRaw = entryParser.GetUnsigned()
-            entryDeclaringTypeRaw = entryParser.GetUnsigned()
-
-            entryMethodEntryPoint = externalReferences.GetFunctionPointerFromIndex(entryParser.GetUnsigned())
-            print('entryMethodEntryPoint', hex(entryMethodEntryPoint))
-
-            if entryFlags & InvokeTableFlags.NeedsParameterInterpretation != 0:
-                entryParser.SkipInteger()
-
-            declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryDeclaringTypeRaw)
-            print('declaringTypeHandle', declaringTypeHandle)
-           
-            # reference: https://github.com/dotnet/runtime/blob/c43fc8966036678d8d603bdfbd1afd79f45b420b/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L716C48-L716C65
-            if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
-                #declaringTypeHandleDefinition = GetTypeDefinition(declaringTypeHandle)
-                #qTypeDefinition = None
-                nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
-
-        entryParser = enumerator.GetNext() 
-        
-    return
-
-initialize_types()
-initialize_rtr()
-(start,end) = find_section_start_end(METHOD_TO_ENTRYPOINT_MAP_SECTION_ID)
-print('__method_entrypoint_map start:', hex(start), 'end:', hex(end))
-parse_hashtable(start, end)
-
-
-
-
-
-#pulled from: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578, this basically fills _ldftnReverseLookup_InvokeMap
-#NOTE: actually setting _ldftnReverseLookup_InvokeMap is done here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L498C17-L498C46
