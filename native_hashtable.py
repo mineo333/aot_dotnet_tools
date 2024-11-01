@@ -140,6 +140,78 @@ class HandleType(IntEnum):
     TypeSpecification = 0x3e
     TypeVariableSignature = 0x3f
 
+class MethodAttributes(IntEnum):
+    # Member access mask
+    MemberAccessMask = 0x0007
+    PrivateScope = 0x0000  # Member not referenceable.
+    Private = 0x0001       # Accessible only by the parent type.
+    FamANDAssem = 0x0002   # Accessible by sub-types only in this Assembly.
+    Assembly = 0x0003      # Accessible by anyone in the Assembly.
+    Family = 0x0004        # Accessible only by type and sub-types.
+    FamORAssem = 0x0005    # Accessible by sub-types anywhere, plus anyone in assembly.
+    Public = 0x0006        # Accessible by anyone who has visibility to this scope.
+
+    # Method contract attributes
+    Static = 0x0010        # Defined on type, else per instance.
+    Final = 0x0020        # Method may not be overridden.
+    Virtual = 0x0040      # Method virtual.
+    HideBySig = 0x0080    # Method hides by name+sig, else just by name.
+    CheckAccessOnOverride = 0x0200
+
+    # Vtable layout mask
+    VtableLayoutMask = 0x0100
+    ReuseSlot = 0x0000     # The default.
+    NewSlot = 0x0100       # Method always gets a new slot in the vtable.
+
+    # Method implementation attributes
+    Abstract = 0x0400      # Method does not provide an implementation.
+    SpecialName = 0x0800   # Method is special. Name describes how.
+
+    # Interop attributes
+    PinvokeImpl = 0x2000   # Implementation is forwarded through pinvoke.
+    UnmanagedExport = 0x0008  # Managed method exported via thunk to unmanaged code.
+    RTSpecialName = 0x1000  # Runtime should check name encoding.
+
+    HasSecurity = 0x4000    # Method has security associated with it.
+    RequireSecObject = 0x8000  # Method calls another method containing security code.
+
+    ReservedMask = 0xd000
+
+    def Read(reader, offset):
+        (offset, value) = reader.DecodeUnsigned(offset)
+        return (offset, MethodAttributes(value))
+    
+class MethodImplAttributes(IntEnum):
+    # Code impl mask
+    CodeTypeMask = 0x0003   # Flags about code type.
+    IL = 0x0000             # Method impl is IL.
+    Native = 0x0001          # Method impl is native.
+    OPTIL = 0x0002          # Method impl is OPTIL.
+    Runtime = 0x0003        # Method impl is provided by the runtime.
+
+    # Managed mask
+    ManagedMask = 0x0004    # Flags specifying whether the code is managed or unmanaged.
+    Unmanaged = 0x0004      # Method impl is unmanaged, otherwise managed.
+    Managed = 0x0000        # Method impl is managed.
+
+    # Implementation info and interop
+    ForwardRef = 0x0010     # Indicates method is not defined; used primarily in merge scenarios.
+    PreserveSig = 0x0080    # Indicates method sig is exported exactly as declared.
+
+    InternalCall = 0x1000   # Internal Call...
+
+    Synchronized = 0x0020    # Method is single threaded through the body.
+    NoInlining = 0x0008      # Method may not be inlined.
+    AggressiveInlining = 0x0100  # Method should be inlined if possible.
+    NoOptimization = 0x0040  # Method may not be optimized.
+    AggressiveOptimization = 0x0200  # Method may contain hot code and should be aggressively optimized.
+
+    MaxMethodImplVal = 0xffff
+
+    def Read(reader, offset):
+        (offset, value) = reader.DecodeUnsigned(offset)
+        return (offset, MethodAttributes(value))
+
 #END CONSTANTS
 sections = None
 #define needed types
@@ -651,8 +723,13 @@ class Method:
         self.handle = handle
         offset = u32(handle.Offset)
         streamReader = reader.streamReader
-        offset = 
-
+        (offset, self.flags) = MethodAttributes.Read(streamReader, offset)
+        (offset, self.implFlags) = MethodImplAttributes.Read(streamReader, offset)
+        (offset, self.name) = NativeFormatHandle.Read(streamReader, offset) # can update this later
+        (offset, self.signature) = NativeFormatHandle.Read(streamReader, offset) # can update this later
+        (offset, self.parameters) = NativeFormatCollection.Read(streamReader, offset)
+        (offset, self.genericParamters) = NativeFormatCollection.Read(streamReader, offset)
+        (offset, self.customAttributes) = NativeFormatCollection.Read(streamReader, offset)
 
 # pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
 class MethodHandle:
@@ -671,25 +748,42 @@ class MethodHandle:
     
     def GetMethod(self, reader):
         return Method(reader, self)
+    
+# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L2025 
+# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3484
+class NativeFormatHandle:
+    def __init__(self, value):
+        self._hType = HandleType(value >> 24)
+        assert self._hType == 0 or self._hType == HandleType.Method or self._hType == HandleType.Null
+        self._value = (value & 0x00FFFFFF) | (HandleType.Method << 24)
 
-# pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
-class ScopeDefinitionHandleCollection:
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def hType(self):
+        return self._hType
+    
+    def Read(reader, offset):
+        (offset, value) = reader.DecodeUnsigned(offset)
+        return (offset, NativeFormatHandle(value))
+
+# used here: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
+# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5572
+# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5641
+# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5503
+class NativeFormatCollection:
     def __init__(self, reader, offset):
         self.reader = reader
         self.offset = offset
-
-    def Count(self):
-        pass
-
-    def GetEnumerator(self):
-        pass
 
     # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L62
     def Read(reader, offset):
         (offset, count) = reader.DecodeUnsigned(offset)
         for _ in range(count):
             offset = reader.SkipInteger(offset)
-        return ScopeDefinitionHandleCollection(reader, offset)
+        return (offset, NativeFormatCollection(reader, offset))
 
 # pulled from: https://github.com/dotnet/runtime/blob/6ac8d055a200ccca0d6fa8604c18578234dffa94/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
 class MetadataHeader:
@@ -701,8 +795,7 @@ class MetadataHeader:
     def Decode(self, reader):
         if reader.ReadUint32(0) != self.SIGNATURE:
             raise ValueError("Bad Image Format Exception")
-        #This read is automaitcally generated (look at link attached to ScopeDefinitionHandleCollection)
-        self.SCOPE_DEFINITIONS = ScopeDefinitionHandleCollection.Read(reader, 4)
+        self.SCOPE_DEFINITIONS = NativeFormatCollection.Read(reader, 4)
 
 
 # pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
