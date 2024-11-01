@@ -611,7 +611,7 @@ class TypeLoaderEnvironment:
             if foundType == runtimeTypeHandle:
                 entryMetadataHandle = Handle(entryParser.GetUnsigned())
                 if entryMetadataHandle.HandleType == HandleType.TypeDefinition:
-                    metadataReader = NativeReader() # Change this to a MetadataReader
+                    metadataReader = MetadataReader(EMBEDDED_METADATA_START, EMBEDDED_METADATA_END - EMBEDDED_METADATA_START)
                     return QTypeDefinition(metadataReader, entryMetadataHandle)
                     
 # pulled from: https://github.com/dotnet/runtime/blob/6ac8d055a200ccca0d6fa8604c18578234dffa94/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L39
@@ -733,6 +733,7 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
 initialize_types()
 initialize_rtr()
 (start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
+(EMBEDDED_METADATA_START,EMBEDDED_METADATA_END) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)
 print('__method_entrypoint_map start:', hex(start), 'end:', hex(end))
 parse_hashtable(start, end)
 
