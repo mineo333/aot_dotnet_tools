@@ -594,6 +594,7 @@ class ExecutionEnvironmentImplementation:
             raise ValueError('Cannot handle generic type')
         return typeHandle
 
+#https://github.com/dotnet/runtime/blob/6c83e0d2f0fbc40a78f7b570127f686767ea5d9f/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L17
 class QMethodDefinition:
     def __init__(self):
         pass
