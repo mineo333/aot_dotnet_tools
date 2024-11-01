@@ -701,6 +701,7 @@ class MetadataHeader:
     def Decode(self, reader):
         if reader.ReadUint32(0) != self.SIGNATURE:
             raise ValueError("Bad Image Format Exception")
+        #This read is automaitcally generated (look at link attached to ScopeDefinitionHandleCollection)
         self.SCOPE_DEFINITIONS = ScopeDefinitionHandleCollection.Read(reader, 4)
 
 
@@ -781,23 +782,3 @@ parse_hashtable(start, end)
 
 #pulled from: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L578, this basically fills _ldftnReverseLookup_InvokeMap
 #NOTE: actually setting _ldftnReverseLookup_InvokeMap is done here: https://github.com/dotnet/runtime/blob/6ed953a000613e5b02e5ac38d35aa4fef6c38660/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L498C17-L498C46
-
-
-
-
-'''
-# pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/ModuleList.cs#L36
-class NativeFormatModuleInfo:
-    def __init__(self, moduleHandle, pBlob, cbBlob):
-        self.MetadataReader = MetadataReader(pBlob, cbBlob)
-
-
-
-# pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/TypeLoaderEnvironment.GVMResolution.cs#L164
-def GetTypeDefinition(typeHandle):
-    if (RuntimeAugments.IsGenericType(typeHandle)):
-        print("generic type found")
-        # would return RuntimeAugments.GetGenericDefinition(typeHandle)
-    return typeHandle
-
-'''
