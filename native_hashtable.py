@@ -584,9 +584,11 @@ class RuntimeAugments:
 #https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L35
 class ExecutionEnvironmentImplementation:
     def GetMetadataForNamedType(runtimeTypeHandle):
-        #calls TryGetMetadataForNamedType
-        pass
-    
+        (is_val, qTypeDefinition) = TypeLoaderEnvironment.TryGetMetadataForNamedType()
+        if not is_val:
+            raise ValueError('Invalid Operation Exception')
+        return qTypeDefinition
+        
     def GetTypeDefinition(typeHandle):
         if (RuntimeAugments.IsGenericType(typeHandle)):
             raise ValueError('Cannot handle generic type')
@@ -626,7 +628,11 @@ class QTypeDefinition:
     def __init__(self, reader, handle):
         self.reader = reader
         self.handle = handle.AsInt()
-
+        
+    @property
+    def NativeFormatReader(self):
+        return self.reader
+    
 # pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
 class MethodHandle:
     def __init__(self, value):
