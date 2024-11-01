@@ -593,6 +593,10 @@ class ExecutionEnvironmentImplementation:
         if (RuntimeAugments.IsGenericType(typeHandle)):
             raise ValueError('Cannot handle generic type')
         return typeHandle
+
+class QMethodDefinition:
+    def __init__(self):
+        pass
     
 
 # pulled from: https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/TypeLoaderEnvironment.Metadata.cs#L55
