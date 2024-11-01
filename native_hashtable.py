@@ -638,6 +638,17 @@ class QTypeDefinition:
     def NativeFormatReader(self):
         return self.reader
     
+
+# pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3175
+class Method:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        offset = u32(handle.Offset)
+        streamReader = reader.streamReader
+        offset = 
+
+
 # pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
 class MethodHandle:
     def __init__(self, value):
@@ -652,6 +663,9 @@ class MethodHandle:
     @property
     def hType(self):
         return self._hType
+    
+    def GetMethod(self, reader):
+        return Method(reader, self)
 
 # pulled from: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
 class ScopeDefinitionHandleCollection:
@@ -665,20 +679,24 @@ class ScopeDefinitionHandleCollection:
     def GetEnumerator(self):
         pass
 
+    # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L62
+    def Read(reader, offset):
+        (offset, count) = reader.DecodeUnsigned(offset)
+        for _ in range(count):
+            offset = reader.SkipInteger(offset)
+        return ScopeDefinitionHandleCollection(reader, offset)
+
 # pulled from: https://github.com/dotnet/runtime/blob/6ac8d055a200ccca0d6fa8604c18578234dffa94/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
 class MetadataHeader:
     SIGNATURE = u32(0xDEADDFFD)
 
     SCOPE_DEFINITIONS = None
-
+    
     # Decode defintion was found in the assembly
     def Decode(self, reader):
         if reader.ReadUint32(0) != self.SIGNATURE:
             raise ValueError("Bad Image Format Exception")
-        (offset, n) = reader.DecodeUnsigned()
-        for _ in range(n):
-            offset = reader.SkipInteger(offset)
-        self.SCOPE_DEFINITIONS = ScopeDefinitionHandleCollection(reader, offset)
+        self.SCOPE_DEFINITIONS = ScopeDefinitionHandleCollection.Read(reader, 4)
 
 
 # pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
