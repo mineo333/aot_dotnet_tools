@@ -596,8 +596,13 @@ class ExecutionEnvironmentImplementation:
 
 #https://github.com/dotnet/runtime/blob/6c83e0d2f0fbc40a78f7b570127f686767ea5d9f/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L17
 class QMethodDefinition:
-    def __init__(self):
-        pass
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+    
+    @property
+    def NativeFormatReader(self):
+        return self.reader
     
 
 # pulled from: https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/TypeLoaderEnvironment.Metadata.cs#L55
