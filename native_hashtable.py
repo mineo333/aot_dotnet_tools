@@ -561,17 +561,17 @@ class NativeHashTable:
             self.low_hashcode = low_hashcode
         
         def GetNext(self):
-            while(parser.offset < self.end_offset):
-                low_hashcode = parser.GetUInt8()
+            while(self.parser.offset < self.end_offset):
+                low_hashcode = self.parser.GetUInt8()
                 
                 if low_hashcode == self.low_hashcode:
-                    return parser.GetParserFromRelativeOffset()
+                    return self.parser.GetParserFromRelativeOffset()
                 
                 if low_hashcode > self.low_hashcode:
-                    self.end_offset = parser.offset
+                    self.end_offset = self.parser.offset
                     break
             
-                parser.SkipInteger() #skip past the current offset
+                self.parser.SkipInteger() #skip past the current offset
             return None
         
     
@@ -599,7 +599,7 @@ class NativeHashTable:
         bucket = (u32(hashcode) >> 8) & self.bucket_mask
         (parser, end_offset) = self.GetParserForBucket(bucket)
         
-        return Enumerator(parser, end_offset, u8(bucket))
+        return NativeHashTable.Enumerator(parser, end_offset, u8(bucket))
 
 class Handle:
     def __init__(self, value):
@@ -636,7 +636,8 @@ class RuntimeTypeHandle:
         return False
     #you can see this in the disassembly for #TryGetMetadataForNamedType
     def __hash__(self):
-        return read32(self.val + 20)
+        return self.val
+    #read32(self.val + 20)
 
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/System.Private.CoreLib/src/Internal/Runtime/Augments/RuntimeAugments.cs#L37
 class RuntimeAugments:
@@ -656,14 +657,15 @@ class RuntimeAugments:
 #https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L35
 class ExecutionEnvironmentImplementation:
     def GetMetadataForNamedType(runtimeTypeHandle):
-        (is_val, qTypeDefinition) = TypeLoaderEnvironment.TryGetMetadataForNamedType()
+        (is_val, qTypeDefinition) = TypeLoaderEnvironment.TryGetMetadataForNamedType(runtimeTypeHandle)
+        print(is_val)
         if not is_val:
             raise ValueError('Invalid Operation Exception')
         return qTypeDefinition
         
     def GetTypeDefinition(typeHandle):
-        if (RuntimeAugments.IsGenericType(typeHandle)):
-            raise ValueError('Cannot handle generic type')
+        #if (RuntimeAugments.IsGenericType(typeHandle)):
+        #    raise ValueError('Cannot handle generic type')
         return typeHandle
 
 #https://github.com/dotnet/runtime/blob/6c83e0d2f0fbc40a78f7b570127f686767ea5d9f/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L17
@@ -675,6 +677,10 @@ class QMethodDefinition:
     @property
     def NativeFormatReader(self):
         return self.reader
+    
+    @property
+    def NativeFormatHandle(self):
+        MethodHandle(self.handle)
     
 
 # pulled from: https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/TypeLoaderEnvironment.Metadata.cs#L55
@@ -745,6 +751,10 @@ class MethodHandle:
     @property
     def hType(self):
         return self._hType
+
+    @property
+    def Offset(self):
+        return self._value & 0xffffff
     
     def GetMethod(self, reader):
         return Method(reader, self)
@@ -778,7 +788,7 @@ class NativeFormatCollection:
         self.reader = reader
         self.offset = offset
 
-    # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L62
+    # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/ReaderGen.cs#L62
     def Read(reader, offset):
         (offset, count) = reader.DecodeUnsigned(offset)
         for _ in range(count):
@@ -793,7 +803,7 @@ class MetadataHeader:
     
     # Decode defintion was found in the assembly
     def Decode(self, reader):
-        if reader.ReadUint32(0) != self.SIGNATURE:
+        if reader.ReadUInt32(0) != self.SIGNATURE:
             raise ValueError("Bad Image Format Exception")
         self.SCOPE_DEFINITIONS = NativeFormatCollection.Read(reader, 4)
 
@@ -853,9 +863,15 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
             print('declaringTypeHandle', declaringTypeHandle)
            
             if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
-                #declaringTypeHandleDefinition = GetTypeDefinition(declaringTypeHandle)
-                #qTypeDefinition = None
+                declaringTypeHandleDefinition = ExecutionEnvironmentImplementation.GetTypeDefinition(declaringTypeHandle)
+                qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)
                 nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
+                methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
+                method = methodHandle.handle.GetMethod()
+                print(hex(METADATA_READER.streamReader.base + method.Offset))
+                
+                
+                
 
         entryParser = enumerator.GetNext() 
         
