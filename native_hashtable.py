@@ -539,7 +539,10 @@ class Handle:
     
     @property
     def Offset(self):
-        return self.value & 0xffffff     
+        return self.value & 0xffffff   
+    
+    def AsInt():
+        return value
 
 #https://github.com/dotnet/runtime/blob/87fea60432fb34a2537a3a593c80042d8230b986/src/mono/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L41
 class RuntimeTypeHandle:
@@ -611,8 +614,12 @@ class TypeLoaderEnvironment:
             if foundType == runtimeTypeHandle:
                 entryMetadataHandle = Handle(entryParser.GetUnsigned())
                 if entryMetadataHandle.HandleType == HandleType.TypeDefinition:
-                    metadataReader = MetadataReader(EMBEDDED_METADATA_START, EMBEDDED_METADATA_END - EMBEDDED_METADATA_START)
-                    return QTypeDefinition(metadataReader, entryMetadataHandle)
+                    metadataReader = METADATA_READER # Change this to a MetadataReader
+                    return (True, QTypeDefinition(metadataReader, entryMetadataHandle))
+
+        
+        return (False, None)
+
                     
 # pulled from: https://github.com/dotnet/runtime/blob/6ac8d055a200ccca0d6fa8604c18578234dffa94/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L39
 class QTypeDefinition:
@@ -681,11 +688,6 @@ class MetadataReader:
         def isNull(self, handle):
             return handle.value == NullHandle.value
 
-        def ToHandle(self, handle):
-            return handle  
-
-        def StringEquals(self, handle, value):
-            pass
 
 # MAIN PARSING CODE STARTS HERE
             
@@ -694,7 +696,8 @@ class MetadataReader:
 def create_metadata_reader(): 
     global METADATA_READER
     (metadata_start, metadata_end) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)  
-    metadataNativeReader = NativeReader(metadata_start, metadata_end-metadata_start)
+    #metadataNativeReader = NativeReader(metadata_start, metadata_end-metadata_start)
+    METADATA_READER = MetadataReader(metadata_start, metadata_end-metadata_start)
     
 
 #this comes from here: https://github.com/dotnet/runtime/blob/c43fc8966036678d8d603bdfbd1afd79f45b420b/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L643
@@ -732,6 +735,7 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
 
 initialize_types()
 initialize_rtr()
+create_metadata_reader()
 (start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
 (EMBEDDED_METADATA_START,EMBEDDED_METADATA_END) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)
 print('__method_entrypoint_map start:', hex(start), 'end:', hex(end))
