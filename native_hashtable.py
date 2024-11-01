@@ -743,6 +743,7 @@ initialize_types()
 initialize_rtr()
 create_metadata_reader()
 (start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
+(EMBEDDED_METADATA_START,EMBEDDED_METADATA_END) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)
 print('__method_entrypoint_map start:', hex(start), 'end:', hex(end))
 parse_hashtable(start, end)
 
