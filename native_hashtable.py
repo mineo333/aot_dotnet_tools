@@ -1,7 +1,7 @@
 from binaryninja import *
 import struct
 import ctypes
-from enum import IntEnum
+from enum import IntEnum, Flag
 #CONSTANTS 
 
 #pulled from: https://github.com/dotnet/runtime/blob/a3fe47ef1a8def24e8d64c305172199ae5a4ed07/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h#L10
@@ -140,7 +140,7 @@ class HandleType(IntEnum):
     TypeSpecification = 0x3e
     TypeVariableSignature = 0x3f
 
-class MethodAttributes(IntEnum):
+class MethodAttributes(Flag):
     # Member access mask
     MemberAccessMask = 0x0007
     PrivateScope = 0x0000  # Member not referenceable.
@@ -181,7 +181,7 @@ class MethodAttributes(IntEnum):
         (offset, value) = reader.DecodeUnsigned(offset)
         return (offset, MethodAttributes(value))
     
-class MethodImplAttributes(IntEnum):
+class MethodImplAttributes(Flag):
     # Code impl mask
     CodeTypeMask = 0x0003   # Flags about code type.
     IL = 0x0000             # Method impl is IL.
@@ -542,8 +542,11 @@ class NativeHashTable:
             #end_offset is the end of the the current bucket
             (self.parser, self.end_offset) = table.GetParserForBucket(self.current_bucket)
 
+        def __iter__(self):
+            return self
+        
         #get next basically 
-        def GetNext(self):
+        def __next__(self):
             while (True):
                 while (self.parser.offset < self.end_offset):
                     
@@ -646,7 +649,10 @@ class RuntimeAugments:
         return RuntimeTypeHandle(ldTokenResult)
     
     def IsGenericType(typeHandle):
-        m_uFlags = u32(read32(typeHandle.val))
+        m_uFlags = u64(read64(typeHandle.val + 0xb8))
+        if not m_uFlags:
+            return False
+        #print("flags: ", hex(m_uFlags))
         return m_uFlags & 0x02000000 != 0
 
     def GetGenericDefinition(typeHandle):
@@ -727,12 +733,12 @@ class Method:
         self.handle = handle
         offset = u32(handle.Offset)
         streamReader = reader.streamReader
-        (offset) = streamReader.SkipInteger(offset) #MethodAttributes.Read(streamReader, offset)
-        (offset) = streamReader.SkipInteger(offset) #MethodImplAttributes.Read(streamReader, offset)
+        (offset, self.flags) = MethodAttributes.Read(streamReader, offset)
+        (offset, self.implFlags) = MethodImplAttributes.Read(streamReader, offset)
         (offset, self.name) = NativeFormatHandle.Read(streamReader, offset) # can update this later
         print(hex(streamReader.base + self.name.Offset))
         (offset, self.signature) = NativeFormatHandle.Read(streamReader, offset) # can update this later
-        print(hex(streamReader.base + self.name.Offset))
+        print(hex(streamReader.base + self.signature.Offset))
         (offset, self.parameters) = NativeFormatCollection.Read(streamReader, offset)
         (offset, self.genericParamters) = NativeFormatCollection.Read(streamReader, offset)
         (offset, self.customAttributes) = NativeFormatCollection.Read(streamReader, offset)
@@ -847,13 +853,12 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
     reader = NativeReader(invokeMapStart, invokeMapEnd-invokeMapStart) #create a NativeReader starting from end-start
     enumerator = NativeHashTable.AllEntriesEnumerator(NativeHashTable(NativeParser(reader, 0))) 
     
-    entryParser = enumerator.GetNext()
+    #entryParser = enumerator.GetNext()
     externalReferences = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
-    while (entryParser is not None): 
+    for entryParser in enumerator: 
         entryFlags = entryParser.GetUnsigned()
         if entryFlags & InvokeTableFlags.HasEntrypoint != 0:
-            #entryParser.SkipInteger()
-
+            
             entryMethodHandleOrNameAndSigRaw = entryParser.GetUnsigned()
             entryDeclaringTypeRaw = entryParser.GetUnsigned()
 
@@ -871,11 +876,8 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
                 qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)
                 nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
                 methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
-                #pass in metadatareader below https://github.com/dotnet/runtime/blob/6c83e0d2f0fbc40a78f7b570127f686767ea5d9f/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L25
                 method = methodHandle.handle.GetMethod(METADATA_READER)
                 #print(hex(METADATA_READER.streamReader.base + method.Offset))
-
-        entryParser = enumerator.GetNext() 
         
     return
 
