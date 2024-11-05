@@ -460,7 +460,7 @@ class NativeParser:
         return NativeParser(self.reader, self.GetRelativeOffset())
 
     def SkipInteger(self):
-        print('skip', hex(self.reader.base + self.offset))
+        #print('skip', hex(self.reader.base + self.offset))
         self.offset = self.reader.SkipInteger(self.offset)
     
     def GetAddress(self):
@@ -632,7 +632,7 @@ class RuntimeTypeHandle:
     
     def __eq__(self, other):
         if isinstance(other, RuntimeTypeHandle):
-            return self.value == other.value
+            return self.val == other.val
         return False
     
     def __hash__(self):
@@ -730,10 +730,12 @@ class Method:
         self.handle = handle
         offset = u32(handle.Offset)
         streamReader = reader.streamReader
-        (offset, self.flags) = MethodAttributes.Read(streamReader, offset)
-        (offset, self.implFlags) = MethodImplAttributes.Read(streamReader, offset)
+        (offset) = streamReader.SkipInteger(offset) #MethodAttributes.Read(streamReader, offset)
+        (offset) = streamReader.SkipInteger(offset) #MethodImplAttributes.Read(streamReader, offset)
         (offset, self.name) = NativeFormatHandle.Read(streamReader, offset) # can update this later
+        print(hex(streamReader.base + self.name.Offset))
         (offset, self.signature) = NativeFormatHandle.Read(streamReader, offset) # can update this later
+        print(hex(streamReader.base + self.name.Offset))
         (offset, self.parameters) = NativeFormatCollection.Read(streamReader, offset)
         (offset, self.genericParamters) = NativeFormatCollection.Read(streamReader, offset)
         (offset, self.customAttributes) = NativeFormatCollection.Read(streamReader, offset)
@@ -775,6 +777,10 @@ class NativeFormatHandle:
     @property
     def hType(self):
         return self._hType
+
+    @property
+    def Offset(self):
+        return self._value & 0xffffff
     
     def Read(reader, offset):
         (offset, value) = reader.DecodeUnsigned(offset)
@@ -868,8 +874,8 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
                 qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)
                 nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
                 methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
-                method = methodHandle.handle.GetMethod()
-                print(hex(METADATA_READER.streamReader.base + method.Offset))
+                method = methodHandle.handle.GetMethod(METADATA_READER)
+                #print(hex(METADATA_READER.streamReader.base + method.Offset))
                 
                 
                 
