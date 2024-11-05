@@ -322,9 +322,6 @@ class ExternalReferencesTable:
         return self.GetAddressFromIndex(idx)
     
     def GetRuntimeTypeHandleFromIndex(self, idx):
-        return self.GetAddressFromIndex(idx) #update this impl if needed
-    
-    def GetRuntimeTypeHandleFromIndex(self, idx):
         return RuntimeAugments.CreateRuntimeTypeHandle(self.GetIntPtrFromIndex(idx))
     
     def GetAddressFromIndex(self, idx):
@@ -622,7 +619,7 @@ class Handle:
 #https://github.com/dotnet/runtime/blob/87fea60432fb34a2537a3a593c80042d8230b986/src/mono/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L41
 class RuntimeTypeHandle:
     def __init__(self, value):
-        self.val = value
+        self.val = value #the value is the vtable for that object
         
     # may need to get updated
     # see: https://github.com/dotnet/runtime/blob/f11dfc95e67ca5ccb52426feda922fe9bcd7adf4/src/libraries/System.Private.CoreLib/src/System/IntPtr.cs#L90
@@ -738,7 +735,6 @@ class Method:
         (offset, self.name) = NativeFormatHandle.Read(streamReader, offset) # can update this later
         print(hex(streamReader.base + self.name.Offset))
         (offset, self.signature) = NativeFormatHandle.Read(streamReader, offset) # can update this later
-        print(hex(streamReader.base + self.signature.Offset))
         (offset, self.parameters) = NativeFormatCollection.Read(streamReader, offset)
         (offset, self.genericParamters) = NativeFormatCollection.Read(streamReader, offset)
         (offset, self.customAttributes) = NativeFormatCollection.Read(streamReader, offset)
@@ -857,27 +853,36 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
     externalReferences = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
     for entryParser in enumerator: 
         entryFlags = entryParser.GetUnsigned()
-        if entryFlags & InvokeTableFlags.HasEntrypoint != 0:
+        
+        if entryFlags & InvokeTableFlags.HasEntrypoint == 0: #its only a method if it has entrypoint
+            continue
             
-            entryMethodHandleOrNameAndSigRaw = entryParser.GetUnsigned()
-            entryDeclaringTypeRaw = entryParser.GetUnsigned()
+        entryMethodHandleOrNameAndSigRaw = entryParser.GetUnsigned()
+        entryDeclaringTypeRaw = entryParser.GetUnsigned()
 
-            entryMethodEntryPoint = externalReferences.GetFunctionPointerFromIndex(entryParser.GetUnsigned())
-            print('entryMethodEntryPoint', hex(entryMethodEntryPoint))
+        entryMethodEntryPoint = externalReferences.GetFunctionPointerFromIndex(entryParser.GetUnsigned())
+        print('entryMethodEntryPoint', hex(entryMethodEntryPoint))
 
-            if entryFlags & InvokeTableFlags.NeedsParameterInterpretation != 0:
-                entryParser.SkipInteger()
+        if entryFlags & InvokeTableFlags.NeedsParameterInterpretation == 0:
+            entryParser.SkipInteger()
 
+
+        if entryFlags & InvokeTableFlags.RequiresInstArg == 0:
             declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryDeclaringTypeRaw)
-            print('declaringTypeHandle', declaringTypeHandle)
-           
-            if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
-                declaringTypeHandleDefinition = ExecutionEnvironmentImplementation.GetTypeDefinition(declaringTypeHandle)
-                qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)
-                nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
-                methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
-                method = methodHandle.handle.GetMethod(METADATA_READER)
-                #print(hex(METADATA_READER.streamReader.base + method.Offset))
+        else:
+            continue
+        
+        print('declaringTypeHandle', declaringTypeHandle)
+        
+        if entryFlags & InvokeTableFlags.IsGenericMethod:
+            continue
+        
+        if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
+            declaringTypeHandleDefinition = ExecutionEnvironmentImplementation.GetTypeDefinition(declaringTypeHandle)
+            qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)
+            nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
+            methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
+            method = methodHandle.handle.GetMethod(METADATA_READER)
         
     return
 
@@ -885,7 +890,6 @@ initialize_types()
 initialize_rtr()
 create_metadata_reader()
 (start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
-(EMBEDDED_METADATA_START,EMBEDDED_METADATA_END) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)
 print('__method_entrypoint_map start:', hex(start), 'end:', hex(end))
 parse_hashtable(start, end)
 
