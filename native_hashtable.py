@@ -460,7 +460,7 @@ class NativeParser:
         return NativeParser(self.reader, self.GetRelativeOffset())
 
     def SkipInteger(self):
-        print('skip', hex(self.reader.base + self.offset))
+        #print('skip', hex(self.reader.base + self.offset))
         self.offset = self.reader.SkipInteger(self.offset)
     
     def GetAddress(self):
@@ -727,10 +727,12 @@ class Method:
         self.handle = handle
         offset = u32(handle.Offset)
         streamReader = reader.streamReader
-        (offset, self.flags) = MethodAttributes.Read(streamReader, offset)
-        (offset, self.implFlags) = MethodImplAttributes.Read(streamReader, offset)
+        (offset) = streamReader.SkipInteger(offset) #MethodAttributes.Read(streamReader, offset)
+        (offset) = streamReader.SkipInteger(offset) #MethodImplAttributes.Read(streamReader, offset)
         (offset, self.name) = NativeFormatHandle.Read(streamReader, offset) # can update this later
+        print(hex(streamReader.base + self.name.Offset))
         (offset, self.signature) = NativeFormatHandle.Read(streamReader, offset) # can update this later
+        print(hex(streamReader.base + self.name.Offset))
         (offset, self.parameters) = NativeFormatCollection.Read(streamReader, offset)
         (offset, self.genericParamters) = NativeFormatCollection.Read(streamReader, offset)
         (offset, self.customAttributes) = NativeFormatCollection.Read(streamReader, offset)
@@ -772,6 +774,10 @@ class NativeFormatHandle:
     @property
     def hType(self):
         return self._hType
+
+    @property
+    def Offset(self):
+        return self._value & 0xffffff
     
     def Read(reader, offset):
         (offset, value) = reader.DecodeUnsigned(offset)
@@ -867,7 +873,7 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
                 methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
                 #pass in metadatareader below https://github.com/dotnet/runtime/blob/6c83e0d2f0fbc40a78f7b570127f686767ea5d9f/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L25
                 method = methodHandle.handle.GetMethod(METADATA_READER)
-                print(hex(METADATA_READER.streamReader.base + method.Offset))
+                #print(hex(METADATA_READER.streamReader.base + method.Offset))
 
         entryParser = enumerator.GetNext() 
         
