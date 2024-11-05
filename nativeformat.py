@@ -1,11 +1,17 @@
 from binaryninja import *
 from .utils import *
+from .rtr import *
+from .dotnet_enums import *
+
 
 '''
 This file constitutes all the native format parsers
 
 This includes objects such as NativeReader, NativeParser, and, most importantly, NativeHashtable
 '''
+
+METADATA_READER = None
+
 
 
 #pulled from: https://github.com/dotnet/runtime/blob/cca022b6212f33adc982630ab91469882250256c/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.cs#L217
@@ -185,7 +191,7 @@ The high level description of NativeHashtable can be seen below
                   |        |                                                          
                   |        |                                                          
                   |        |                                                          
-                  +--------+<-----Bucket offsets                                      
+                  +--------+<-----Bucket offsets/base_offset                                      
                   +--------+<-----Header Byte                                         
 '''
 class NativeHashTable:
@@ -275,4 +281,64 @@ class NativeHashTable:
         (parser, end_offset) = self.GetParserForBucket(bucket)
         
         return NativeHashTable.Enumerator(parser, end_offset, u8(hashcode))
+    
+
+# pulled from: https://github.com/dotnet/runtime/blob/6ac8d055a200ccca0d6fa8604c18578234dffa94/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
+class MetadataHeader:
+    SIGNATURE = u32(0xDEADDFFD)
+
+    SCOPE_DEFINITIONS = None
+    
+    # Decode defintion was found in the assembly
+    def Decode(self, reader):
+        if reader.ReadUInt32(0) != self.SIGNATURE:
+            raise ValueError("Bad Image Format Exception")
+        self.SCOPE_DEFINITIONS = NativeFormatCollection.Read(reader, 4)
+
+
+# pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
+class MetadataReader:
+    def __init__(self, pBuffer, cbBuffer):
+        self.streamReader = NativeReader(pBuffer, u32(cbBuffer))
+        self.header = MetadataHeader()
+        self.header.Decode(self.streamReader)
+
+        @property
+        def ScopeDefinitions():
+            return self.header.SCOPE_DEFINITIONS
+        
+        @property
+        def NullHandle():
+            return Handle(HandleType.Null << 24)
+
+        def isNull(self, handle):
+            return handle.value == NullHandle.value
+
+
+
+# used here: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
+# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5572
+# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5641
+# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5503
+class NativeFormatCollection:
+    def __init__(self, reader, offset):
+        self.reader = reader
+        self.offset = offset
+
+    # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/ReaderGen.cs#L62
+    def Read(reader, offset):
+        (offset, count) = reader.DecodeUnsigned(offset)
+        for _ in range(count):
+            offset = reader.SkipInteger(offset)
+        return (offset, NativeFormatCollection(reader, offset))
+
+            
+            
+#The metadata reader is created here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/ModuleList.cs#L273
+def create_metadata_reader(): 
+    global METADATA_READER
+    (metadata_start, metadata_end) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)  
+    #metadataNativeReader = NativeReader(metadata_start, metadata_end-metadata_start)
+    METADATA_READER = MetadataReader(metadata_start, metadata_end-metadata_start)
+    
     

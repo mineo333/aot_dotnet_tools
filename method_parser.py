@@ -77,14 +77,9 @@ class MethodImplAttributes(Flag):
 
     def Read(reader, offset):
         (offset, value) = reader.DecodeUnsigned(offset)
-        return (offset, MethodAttributes(value))
+        return (offset, MethodImplAttributes(value))
 
-#END CONSTANTS
 
-METADATA_READER = None
-    
-
-#BELOW THIS ARE THE NATIVE FORMAT HELPERS
 
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/Common/src/Internal/Runtime/TypeLoader/ExternalReferencesTable.cs#L15
 class ExternalReferencesTable:
@@ -110,21 +105,6 @@ class ExternalReferencesTable:
         return pRelPtr32 + s64(s32(read32(pRelPtr32))) 
 
 
-
-class Handle:
-    def __init__(self, value):
-        self.value = value
-    
-    @property
-    def HandleType(self):
-        return HandleType(self.value >> 24)
-    
-    @property
-    def Offset(self):
-        return self.value & 0xffffff   
-    
-    def AsInt(self):
-        return self.value
 
 #https://github.com/dotnet/runtime/blob/87fea60432fb34a2537a3a593c80042d8230b986/src/mono/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L41
 class RuntimeTypeHandle:
@@ -207,7 +187,6 @@ class TypeLoaderEnvironment:
         typeMapHashtable = NativeHashTable(typeMapParser)
         externalReferences = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
         
-        print('hashcode', hex(hashcode))
         lookup = typeMapHashtable.Lookup(hashcode)
         entryParser = lookup.GetNext()
         while entryParser is not None:
@@ -295,63 +274,8 @@ class NativeFormatHandle:
         (offset, value) = reader.DecodeUnsigned(offset)
         return (offset, NativeFormatHandle(value))
 
-# used here: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
-# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5572
-# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5641
-# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5503
-class NativeFormatCollection:
-    def __init__(self, reader, offset):
-        self.reader = reader
-        self.offset = offset
-
-    # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/ReaderGen.cs#L62
-    def Read(reader, offset):
-        (offset, count) = reader.DecodeUnsigned(offset)
-        for _ in range(count):
-            offset = reader.SkipInteger(offset)
-        return (offset, NativeFormatCollection(reader, offset))
-
-# pulled from: https://github.com/dotnet/runtime/blob/6ac8d055a200ccca0d6fa8604c18578234dffa94/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L225
-class MetadataHeader:
-    SIGNATURE = u32(0xDEADDFFD)
-
-    SCOPE_DEFINITIONS = None
-    
-    # Decode defintion was found in the assembly
-    def Decode(self, reader):
-        if reader.ReadUInt32(0) != self.SIGNATURE:
-            raise ValueError("Bad Image Format Exception")
-        self.SCOPE_DEFINITIONS = NativeFormatCollection.Read(reader, 4)
 
 
-# pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
-class MetadataReader:
-    def __init__(self, pBuffer, cbBuffer):
-        self.streamReader = NativeReader(pBuffer, u32(cbBuffer))
-        self.header = MetadataHeader()
-        self.header.Decode(self.streamReader)
-
-        @property
-        def ScopeDefinitions():
-            return self.header.SCOPE_DEFINITIONS
-        
-        @property
-        def NullHandle():
-            return Handle(HandleType.Null << 24)
-
-        def isNull(self, handle):
-            return handle.value == NullHandle.value
-
-
-# MAIN PARSING CODE STARTS HERE
-            
-            
-#The metadata reader is created here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/ModuleList.cs#L273
-def create_metadata_reader(): 
-    global METADATA_READER
-    (metadata_start, metadata_end) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)  
-    #metadataNativeReader = NativeReader(metadata_start, metadata_end-metadata_start)
-    METADATA_READER = MetadataReader(metadata_start, metadata_end-metadata_start)
     
 
 #this comes from here: https://github.com/dotnet/runtime/blob/c43fc8966036678d8d603bdfbd1afd79f45b420b/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L643

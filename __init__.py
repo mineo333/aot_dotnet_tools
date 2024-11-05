@@ -10,13 +10,20 @@ from .dotnet_enums import *
 from .handles import *
 import importlib
 
-def rehydration(bv):
+def doit(bv):
+    print('hello world')
     utils.initialize_utils(bv)
     rtr.initialize_types(bv)
     rtr.populate_sections(bv)
     rehydrate.do_rehydration(bv)
+    nativeformat.create_metadata_reader()
     method_parser.parse_methods()
-    
+
+
+'''
+to reload in binja run the following line in the binja console:
+import importlib; import aot_dotnet; importlib.reload(aot_dotnet); aot_dotnet.reload_all()
+'''
 def reload_all():
     importlib.reload(rehydrate)
     importlib.reload(rtr)
