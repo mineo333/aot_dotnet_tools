@@ -599,7 +599,7 @@ class NativeHashTable:
         bucket = (u32(hashcode) >> 8) & self.bucket_mask
         (parser, end_offset) = self.GetParserForBucket(bucket)
         
-        return NativeHashTable.Enumerator(parser, end_offset, u8(bucket))
+        return NativeHashTable.Enumerator(parser, end_offset, u8(hashcode))
 
 class Handle:
     def __init__(self, value):
@@ -613,8 +613,8 @@ class Handle:
     def Offset(self):
         return self.value & 0xffffff   
     
-    def AsInt():
-        return value
+    def AsInt(self):
+        return self.value
 
 #https://github.com/dotnet/runtime/blob/87fea60432fb34a2537a3a593c80042d8230b986/src/mono/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L41
 class RuntimeTypeHandle:
@@ -634,10 +634,10 @@ class RuntimeTypeHandle:
         if isinstance(other, RuntimeTypeHandle):
             return self.value == other.value
         return False
-    #you can see this in the disassembly for #TryGetMetadataForNamedType
+    
     def __hash__(self):
-        return self.val
-    #read32(self.val + 20)
+        return read32(self.val + 0x14)
+    
 
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/System.Private.CoreLib/src/Internal/Runtime/Augments/RuntimeAugments.cs#L37
 class RuntimeAugments:
@@ -646,9 +646,10 @@ class RuntimeAugments:
         return RuntimeTypeHandle(ldTokenResult)
     
     def IsGenericType(typeHandle):
-        m_uFlags = u32(read32(typeHandle + M_UFLAGS_OFF))
-        #print("flags: ", m_uFlags)
-        # check for generic type
+        m_uFlags = u64(read64(typeHandle.val + 0xb8))
+        if not m_uFlags:
+            return False
+        #print("flags: ", hex(m_uFlags))
         return m_uFlags & 0x02000000 != 0
 
     def GetGenericDefinition(typeHandle):
@@ -658,14 +659,13 @@ class RuntimeAugments:
 class ExecutionEnvironmentImplementation:
     def GetMetadataForNamedType(runtimeTypeHandle):
         (is_val, qTypeDefinition) = TypeLoaderEnvironment.TryGetMetadataForNamedType(runtimeTypeHandle)
-        print(is_val)
         if not is_val:
             raise ValueError('Invalid Operation Exception')
         return qTypeDefinition
         
     def GetTypeDefinition(typeHandle):
-        #if (RuntimeAugments.IsGenericType(typeHandle)):
-        #    raise ValueError('Cannot handle generic type')
+        if (RuntimeAugments.IsGenericType(typeHandle)):
+            raise ValueError('Cannot handle generic type')
         return typeHandle
 
 #https://github.com/dotnet/runtime/blob/6c83e0d2f0fbc40a78f7b570127f686767ea5d9f/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L17
@@ -697,6 +697,7 @@ class TypeLoaderEnvironment:
         typeMapHashtable = NativeHashTable(typeMapParser)
         externalReferences = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
         
+        print('hashcode', hex(hashcode))
         lookup = typeMapHashtable.Lookup(hashcode)
         entryParser = lookup.GetNext()
         while entryParser is not None:
@@ -704,7 +705,7 @@ class TypeLoaderEnvironment:
             if foundType == runtimeTypeHandle:
                 entryMetadataHandle = Handle(entryParser.GetUnsigned())
                 if entryMetadataHandle.HandleType == HandleType.TypeDefinition:
-                    metadataReader = METADATA_READER # Change this to a MetadataReader
+                    metadataReader = METADATA_READER 
                     return (True, QTypeDefinition(metadataReader, entryMetadataHandle))
 
         
