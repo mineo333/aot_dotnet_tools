@@ -632,7 +632,7 @@ class RuntimeTypeHandle:
     
     def __eq__(self, other):
         if isinstance(other, RuntimeTypeHandle):
-            return self.value == other.value
+            return self.val == other.val
         return False
     
     def __hash__(self):
@@ -646,10 +646,7 @@ class RuntimeAugments:
         return RuntimeTypeHandle(ldTokenResult)
     
     def IsGenericType(typeHandle):
-        m_uFlags = u64(read64(typeHandle.val + 0xb8))
-        if not m_uFlags:
-            return False
-        #print("flags: ", hex(m_uFlags))
+        m_uFlags = u32(read32(typeHandle.val))
         return m_uFlags & 0x02000000 != 0
 
     def GetGenericDefinition(typeHandle):
@@ -868,11 +865,9 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
                 qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)
                 nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
                 methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
-                method = methodHandle.handle.GetMethod()
+                #pass in metadatareader below https://github.com/dotnet/runtime/blob/6c83e0d2f0fbc40a78f7b570127f686767ea5d9f/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L25
+                method = methodHandle.handle.GetMethod(METADATA_READER)
                 print(hex(METADATA_READER.streamReader.base + method.Offset))
-                
-                
-                
 
         entryParser = enumerator.GetNext() 
         
