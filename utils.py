@@ -1,0 +1,45 @@
+from binaryninja import *
+import ctypes
+
+
+READER = None
+
+#TODO: Change this so that we are not allocating objects every time 
+def read8(address): 
+    global READER
+    return READER.read8(address)  
+
+def read16(address):
+    global READER
+    return READER.read16(address)
+
+def read32(address):
+    global READER
+    return READER.read32(address)
+
+def read64(address):
+    global READER
+    return READER.read64(address)
+
+#convert an unsigned byte to a signed byte
+def s8(val): 
+    return ctypes.c_byte(val & 0xff).value
+
+def u8(val):
+    return ctypes.c_ubyte(val & 0xff).value
+
+def s32(val):
+    return ctypes.c_int(val & 0xffffffff).value
+
+def u32(val):
+    return ctypes.c_uint(val & 0xffffffff).value
+
+def s64(val):
+    return ctypes.c_long(val).value
+
+def u64(val):
+    return ctypes.c_ulong(val).value
+    
+def initialize_utils(bv):
+    global READER
+    READER = bv.reader(0)
