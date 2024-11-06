@@ -8,10 +8,11 @@ from .method_parser import *
 from .nativeformat import *
 from .dotnet_enums import *
 from .handles import *
+from .misc import *
+from .flags import *
 import importlib
 
 def doit(bv):
-    print('hello world')
     utils.initialize_utils(bv)
     rtr.initialize_types(bv)
     rtr.populate_sections(bv)
@@ -23,6 +24,11 @@ def doit(bv):
 '''
 to reload in binja run the following line in the binja console:
 import importlib; import aot_dotnet; importlib.reload(aot_dotnet); aot_dotnet.reload_all()
+
+for m in [x for x in sys.modules if 'aot_dotnet' in x]:  
+    del sys.modules[m]
+del aot_dotnet; import aot_dotnet; aot_dotnet.doit(bv)
+
 '''
 def reload_all():
     importlib.reload(rehydrate)
@@ -31,4 +37,6 @@ def reload_all():
     importlib.reload(method_parser)
     importlib.reload(nativeformat)
     importlib.reload(dotnet_enums)
+    importlib.reload(misc)
+    importlib.reload(flags)
     importlib.reload(handles)

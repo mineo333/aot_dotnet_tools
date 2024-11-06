@@ -331,8 +331,6 @@ class NativeFormatCollection:
         for _ in range(count):
             offset = reader.SkipInteger(offset)
         return (offset, NativeFormatCollection(reader, offset))
-
-            
             
 #The metadata reader is created here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/ModuleList.cs#L273
 def create_metadata_reader(): 
@@ -340,5 +338,9 @@ def create_metadata_reader():
     (metadata_start, metadata_end) = find_section_start_end(ReflectionMapBlob.EmbeddedMetadata)  
     #metadataNativeReader = NativeReader(metadata_start, metadata_end-metadata_start)
     METADATA_READER = MetadataReader(metadata_start, metadata_end-metadata_start)
-    
+
+#get the global METADATA_READER
+def METADATA_READER():
+    global METADATA_READER
+    return METADATA_READER
     
