@@ -1,7 +1,7 @@
 from binaryninja import *
 import struct
 import ctypes
-from enum import IntEnum
+from enum import IntEnum, Enum
 #CONSTANTS 
 
 #pulled from: https://github.com/dotnet/runtime/blob/a3fe47ef1a8def24e8d64c305172199ae5a4ed07/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h#L10
@@ -54,6 +54,13 @@ MASK_64 = 0xffffffffffffffff
 
 # pulled from: https://github.com/dotnet/runtime/blob/f11dfc95e67ca5ccb52426feda922fe9bcd7adf4/src/coreclr/nativeaot/Runtime/inc/MethodTable.h#L103
 M_UFLAGS_OFF = 8
+
+#https://github.com/dotnet/runtime/blob/9f54e5162a177b8d6ad97ba53c6974fb02d0a47d/src/coreclr/nativeaot/Runtime/inc/MethodTable.h#L144C35-L144C45
+IS_GENERIC_FLAG = 0x02000000
+
+#https://github.com/dotnet/runtime/blob/6d23ef4d68bbcdb38fdc22218d1073c5083ac6a1/src/coreclr/nativeaot/Runtime/inc/MethodTable.h#L110C27-L110C45
+NUM_VTABLE_SLOTS_OFF = 0x10
+NUM_INTERFACES_OFF = 0x12
 
 # Pulled from: https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Runtime/MappingTableFlags.cs#L21
 class InvokeTableFlags(IntEnum):
@@ -638,7 +645,6 @@ class RuntimeTypeHandle:
     def __hash__(self):
         return read32(self.val + 0x14)
     
-
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/nativeaot/System.Private.CoreLib/src/Internal/Runtime/Augments/RuntimeAugments.cs#L37
 class RuntimeAugments:
     
@@ -647,10 +653,50 @@ class RuntimeAugments:
     
     def IsGenericType(typeHandle):
         m_uFlags = u32(read32(typeHandle.val))
-        return m_uFlags & 0x02000000 != 0
+        return m_uFlags & IS_GENERIC_FLAG != 0
 
+    # pulled from assembly and https://github.com/dotnet/runtime/blob/6d23ef4d68bbcdb38fdc22218d1073c5083ac6a1/src/coreclr/nativeaot/Common/src/Internal/Runtime/MethodTable.cs#L457
     def GetGenericDefinition(typeHandle):
-        pass
+        flags = u32(read32(typeHandle.val))
+
+        if (flags & 0x80000) == 0:
+            off = (read16(typeHandle.val + NUM_INTERFACES_OFF) << 3) + (read16(typeHandle.val + NUM_VTABLE_SLOTS_OFF) << 3) + 0x20
+
+            if (flags & 0x40000) != 0:
+                off += 4
+            if (flags & 0x100000) != 0:
+                off += 4
+            if (flags & 0x1000000) != 0:
+                off += 4
+            if (flags & 0x400000) != 0:
+                off += 4
+            
+            n = typeHandle.val + off
+            b = read32(n)
+
+            if (u32(b) & 1) != 0:
+                return RuntimeTypeHandle(read32(n + s32(b & 0xfffffffe)))
+
+            return RuntimeTypeHandle(n + s32(b))
+
+        off = (read16(typeHandle.val + NUM_INTERFACES_OFF) << 3) + (read16(typeHandle.val + NUM_VTABLE_SLOTS_OFF) << 3) + 0x28
+
+        if (flags & 0x40000) != 0:
+            off += 8
+        if (flags & 0x100000) != 0:
+            off += 8
+        if (flags & 0x1000000) != 0:
+            off += 8
+        if (flags & 0x400000) != 0:
+            off += 8
+
+        n = typeHandle.val + off
+        b = read32(n)
+
+        if (u32(b) & 1) != 0:
+            return RuntimeTypeHandle(read32(b - 1))
+
+        return RuntimeTypeHandle(b)
 
 #https://github.com/dotnet/runtime/blob/86d2eaa16d818149c1c2869bf0234c6eba24afac/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L35
 class ExecutionEnvironmentImplementation:
@@ -662,7 +708,9 @@ class ExecutionEnvironmentImplementation:
         
     def GetTypeDefinition(typeHandle):
         if (RuntimeAugments.IsGenericType(typeHandle)):
-            raise ValueError('Cannot handle generic type')
+            ret = RuntimeAugments.GetGenericDefinition(typeHandle)
+            print('gen typ', ret)
+            return ret
         return typeHandle
 
 #https://github.com/dotnet/runtime/blob/6c83e0d2f0fbc40a78f7b570127f686767ea5d9f/src/coreclr/nativeaot/System.Private.CoreLib/src/System/Reflection/Runtime/General/QHandles.NativeFormat.cs#L17
@@ -865,7 +913,7 @@ def parse_hashtable(invokeMapStart, invokeMapEnd):
 
             declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryDeclaringTypeRaw)
             print('declaringTypeHandle', declaringTypeHandle)
-           
+
             if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
                 declaringTypeHandleDefinition = ExecutionEnvironmentImplementation.GetTypeDefinition(declaringTypeHandle)
                 qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)
