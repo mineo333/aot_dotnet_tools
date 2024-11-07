@@ -49,7 +49,7 @@ Using the Schema, we output the source code for every read here: https://github.
 
 Looking in the ReaderGen, there are a few "classes" of reads that exist. Firstly, there exists a single read for all Handles, a single read for all Collections, etc. We seek to emulate that in the following code. We have a NativeFormatHandle which is a top-level class for Handles and implements the read for all handle classes. Any handles extend NativeFormatHandle as a subclass. We also have NativeFormatCollection which all collections extend.
 
-On top of that most Handles and Collections have shared handling of data as well as, for the most part, the same members. For example, all collections have a reader and offset while all handles have a value. In addition, all types of a certain "class" have the same constructor. 
+On top of that most Handles and Collections have shared handling of data as well as, for the most part, the same members. For example, all handles will always have the top 8 bits be the hType and the bottom 24 bits be the offset. In addition, all types of a certain "class" have the same constructor. 
 '''
 
 
@@ -75,6 +75,7 @@ class NativeFormatHandle:
     
     #This method should NEVER be called directly. Instead, it should be called by a subclass
     #Pulled from https://github.com/dotnet/runtime/blob/e133fe4f5311c0397f8cc153bada693c48eb7a9f/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L101
+    #returns the new offset as well as the newly created handle
     def Read(reader, offset, subclass):
         (offset, value) = reader.DecodeUnsigned(offset)
         handle = subclass(value)
@@ -87,6 +88,7 @@ class NativeFormatCollection:
         self.offset = offset
 
     # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L62
+    #returns the new offset and the newly created collection
     def Read(reader, offset, subclass):
         values = subclass(reader, offset) #this subclass shit is a bit scuffed but this is basically how the code does it
         (offset, count) = reader.DecodeUnsigned(offset)
@@ -174,11 +176,6 @@ class MethodSignatureHandle(NativeFormatHandle):
     
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
-    
-
-
-
-
 
 
 '''

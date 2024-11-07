@@ -45,13 +45,17 @@ def WriteRelPtr32(bw, value):
 
 #reimplement the following algorithm: https://github.com/dotnet/runtime/blob/a3fe47ef1a8def24e8d64c305172199ae5a4ed07/src/coreclr/nativeaot/Common/src/Internal/Runtime/CompilerHelpers/StartupCodeHelpers.cs#L247
 def RehydrateData(bv, start, length):
+    hydrated_start = bv.sections['hydrated'].start
+    hydrated_length = bv.sections['hydrated'].end - hydrated_start
     pEnd = start+length
     pCurrentReader = bv.reader(start) #pCurrentReader.offset is pCurrent
     FixupBr = bv.reader(pEnd) #FixupBr is for reading from pFixups
-    pDestReader = bv.writer(ReadRelPtr32(pCurrentReader)) #pDestReader.offset is pDest
-
+    dest_start = ReadRelPtr32(pCurrentReader)
+    assert dest_start == hydrated_start
+    pDestReader = bv.writer(dest_start) #pDestReader.offset is pDest
+    
     bv.memory_map.remove_memory_region('hydrated_mem')
-    assert bv.memory_map.add_memory_region('hydrated_mem', pDestReader.offset, b'\x00'*length)
+    assert bv.memory_map.add_memory_region('hydrated_mem', pDestReader.offset, b'\x00'*hydrated_length)
 
     while pCurrentReader.offset < pEnd:
         (payload, command) = DehydratedDataCommand.Decode(DehydratedDataCommand, pCurrentReader)
