@@ -31,6 +31,7 @@ def parse_invokemap(invokeMapStart, invokeMapEnd):
             entryParser.SkipInteger()
 
 
+
         if entryFlags & InvokeTableFlags.RequiresInstArg == 0:
             declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryDeclaringTypeRaw)
         else:
@@ -40,6 +41,8 @@ def parse_invokemap(invokeMapStart, invokeMapEnd):
         
         if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
             declaringTypeHandleDefinition = ExecutionEnvironmentImplementation.GetTypeDefinition(declaringTypeHandle)
+            if declaringTypeHandle != declaringTypeHandleDefinition:
+                print('declaringTypeHandleDefinition', declaringTypeHandleDefinition)
             qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)
             nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
             methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)

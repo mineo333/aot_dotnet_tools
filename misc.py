@@ -113,6 +113,7 @@ class TypeLoaderEnvironment:
         global METADATA_READER
         #note we only use the current module
         hashcode = runtimeTypeHandle.GetHashCode()
+        #print('hashcode', hex(hashcode))
         (typeMapStart, typeMapEnd) = find_section_start_end(ReflectionMapBlob.TypeMap)
         typeMapReader = NativeReader(typeMapStart, typeMapEnd-typeMapStart)
         typeMapParser = NativeParser(typeMapReader, 0)
@@ -122,10 +123,12 @@ class TypeLoaderEnvironment:
         lookup = typeMapHashtable.Lookup(hashcode)
         entryParser = lookup.GetNext()
         while entryParser is not None:
-            foundType = externalReferences.GetRuntimeTypeHandleFromIndex(entryParser.GetUnsigned())
+            idx = entryParser.GetUnsigned()
+            foundType = externalReferences.GetRuntimeTypeHandleFromIndex(idx)
             if foundType == runtimeTypeHandle:
                 entryMetadataHandle = NativeFormatHandle(entryParser.GetUnsigned())
                 if entryMetadataHandle.hType == HandleType.TypeDefinition:
                     metadataReader = METADATA_READER()
                     return (True, QTypeDefinition(metadataReader, entryMetadataHandle))
+            entryParser = lookup.GetNext()
         return (False, None)

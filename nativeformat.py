@@ -231,7 +231,7 @@ class NativeHashTable:
                     self.parser.GetUInt8() #skip hashcode
                     return self.parser.GetParserFromRelativeOffset()
                 if (self.current_bucket >= self.table.bucket_mask):
-                    return #the default value for an object is null
+                    raise StopIteration
                 self.current_bucket += 1
                 (self.parser, self.end_offset) = self.table.GetParserForBucket(self.current_bucket)
     

@@ -6,9 +6,9 @@ from .flags import *
 #this contains the various handle types in
 
 
-#https://github.com/dotnet/runtime/blob/87fea60432fb34a2537a3a593c80042d8230b986/src/mono/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L41
+#https://github.com/dotnet/runtime/blob/ecd5ee7277b1eb33bed4cc91ce7abee609bbbd71/src/coreclr/nativeaot/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L17
 
-#the RuntimeTypeHandle is a special case
+#the RuntimeTypeHandle is basically a shitty wrapper around MethodTable
 
 class RuntimeTypeHandle:
     def __init__(self, value):  

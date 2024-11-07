@@ -9,7 +9,6 @@ Random utility classes that make working with the binary a little easier
 
 READER = None
 
-#TODO: Change this so that we are not allocating objects every time 
 def read8(address): 
     global READER
     return READER.read8(address)  
