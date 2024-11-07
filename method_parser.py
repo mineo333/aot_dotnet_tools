@@ -38,9 +38,6 @@ def parse_invokemap(invokeMapStart, invokeMapEnd):
         
         print('declaringTypeHandle', declaringTypeHandle)
         
-        if entryFlags & InvokeTableFlags.IsGenericMethod:
-            continue
-        
         if entryFlags & int(InvokeTableFlags.HasMetadataHandle) != 0:
             declaringTypeHandleDefinition = ExecutionEnvironmentImplementation.GetTypeDefinition(declaringTypeHandle)
             qTypeDefinition = ExecutionEnvironmentImplementation.GetMetadataForNamedType(declaringTypeHandleDefinition)

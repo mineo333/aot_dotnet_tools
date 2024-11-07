@@ -2,7 +2,7 @@ from binaryninja import *
 from .utils import *
 from .rtr import *
 from .dotnet_enums import *
-
+from .handles import *
 
 '''
 This file constitutes all the native format parsers
@@ -293,7 +293,7 @@ class MetadataHeader:
     def Decode(self, reader):
         if reader.ReadUInt32(0) != self.SIGNATURE:
             raise ValueError("Bad Image Format Exception")
-        self.SCOPE_DEFINITIONS = NativeFormatCollection.Read(reader, 4)
+        (_, self.SCOPE_DEFINITIONS) = ScopeDefinitionHandleCollection.Read(reader, 4) #we don't care about the offset
 
 
 # pulled from: https://github.com/dotnet/runtime/blob/95bae2b141e5d1b8528b1f8620f3e9d459abe640/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeMetadataReader.cs#L162
@@ -315,22 +315,6 @@ class MetadataReader:
             return handle.value == NullHandle.value
 
 
-
-# used here: https://github.com/dotnet/runtime/blob/6fa9cfcdd9179a33a10c096c06150c4a11ccc93e/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
-# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5572
-# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5641
-# used here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5503
-class NativeFormatCollection:
-    def __init__(self, reader, offset):
-        self.reader = reader
-        self.offset = offset
-
-    # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/ReaderGen.cs#L62
-    def Read(reader, offset):
-        (offset, count) = reader.DecodeUnsigned(offset)
-        for _ in range(count):
-            offset = reader.SkipInteger(offset)
-        return (offset, NativeFormatCollection(reader, offset))
             
 #The metadata reader is created here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/nativeaot/System.Private.TypeLoader/src/Internal/Runtime/TypeLoader/ModuleList.cs#L273
 def create_metadata_reader(): 
