@@ -141,7 +141,7 @@ class Method:
         (offset, self.flags) = MethodAttributes.Read(streamReader, offset)
         (offset, self.implFlags) = MethodImplAttributes.Read(streamReader, offset)
         (offset, self.name) = ConstantStringValueHandle.Read(streamReader, offset) 
-        print('name',hex(streamReader.base + self.name.Offset))
+        #print('name',hex(streamReader.base + self.name.Offset))
         (offset, self.signature) = MethodSignatureHandle.Read(streamReader, offset) 
         (offset, self.parameters) = ParameterHandleCollection.Read(streamReader, offset)
         (offset, self.genericParameters) = GenericParameterHandleCollection.Read(streamReader, offset)
@@ -158,6 +158,15 @@ class MethodHandle(NativeFormatHandle):
     
     def Read(reader, offset):
         (offset, value) = NativeFormatHandle.Read(reader, offset, __class__)
+
+#this was retrieved from the disassembly
+class ConstantStringValue:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        streamReader = reader.streamReader
+        (_, self.value) = streamReader.DecodeString(handle.Offset)
+    def __str__(self):
+        return self.value
     
 # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L2029
 class ConstantStringValueHandle(NativeFormatHandle):
@@ -167,6 +176,11 @@ class ConstantStringValueHandle(NativeFormatHandle):
 
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
+    
+    def GetConstantStringValue(self, metadataReader):
+        return ConstantStringValue(metadataReader, self)
+    
+
     
 # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3480
 class MethodSignatureHandle(NativeFormatHandle):

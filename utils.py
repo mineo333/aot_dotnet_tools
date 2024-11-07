@@ -25,6 +25,10 @@ def read64(address):
     global READER
     return READER.read64(address)
 
+def read(address, read_len):
+    global READER
+    return READER.read(read_len, address)
+
 #convert an unsigned byte to a signed byte
 def s8(val): 
     return ctypes.c_byte(val & 0xff).value

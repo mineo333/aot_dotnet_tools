@@ -85,7 +85,7 @@ class NativeReader:
             stream += 4
         elif ((val & 16) == 0):
             stream += 1
-            pvalue = s32(br.read32())
+            pvalue = s32(read32(stream))
             stream += 4 #this 4 is to account for the 4 bytes incremented in ReadUInt32
         else:
             raise ValueError("Fuck you")
@@ -108,6 +108,15 @@ class NativeReader:
             return offset + 9
         else:
             raise ValueError('Bad Image Format Exception')
+    
+    #https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/NativeFormat/NativeFormatReader.String.cs#L38
+    def DecodeString(self, offset):
+        (offset, numBytes) = self.DecodeUnsigned(offset)
+        if numBytes == 0:
+            return (offset, '')
+        endOffset = offset+numBytes
+        bytes = read(self.base+offset, numBytes)
+        return (endOffset, bytes.decode('utf-8'))
 
 class NativeParser:
     def __init__(self, reader, offset):

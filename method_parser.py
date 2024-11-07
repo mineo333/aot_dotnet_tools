@@ -47,6 +47,7 @@ def parse_invokemap(invokeMapStart, invokeMapEnd):
             nativeFormatMethodHandle = MethodHandle((HandleType.Method << 24) | entryMethodHandleOrNameAndSigRaw)
             methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
             method = methodHandle.handle.GetMethod(METADATA_READER())
+            print('name', method.name.GetConstantStringValue(METADATA_READER()))
         
     return
 
