@@ -240,8 +240,11 @@ class NativeHashTable:
             self.parser = parser
             self.end_offset = end_offset
             self.low_hashcode = low_hashcode
+            
+        def __iter__(self):
+            return self
         
-        def GetNext(self):
+        def __next__(self):
             while(self.parser.offset < self.end_offset):
                 low_hashcode = self.parser.GetUInt8()
                 
@@ -253,7 +256,7 @@ class NativeHashTable:
                     break
             
                 self.parser.SkipInteger() #skip past the current offset
-            return None
+            raise StopIteration
         
     
     def GetParserForBucket(self, bucket): #returns the NativeParser and the endOffset

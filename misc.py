@@ -121,8 +121,8 @@ class TypeLoaderEnvironment:
         externalReferences = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
         
         lookup = typeMapHashtable.Lookup(hashcode)
-        entryParser = lookup.GetNext()
-        while entryParser is not None:
+        
+        for entryParser in lookup:
             idx = entryParser.GetUnsigned()
             foundType = externalReferences.GetRuntimeTypeHandleFromIndex(idx)
             if foundType == runtimeTypeHandle:
@@ -130,5 +130,4 @@ class TypeLoaderEnvironment:
                 if entryMetadataHandle.hType == HandleType.TypeDefinition:
                     metadataReader = METADATA_READER()
                     return (True, QTypeDefinition(metadataReader, entryMetadataHandle))
-            entryParser = lookup.GetNext()
         return (False, None)
