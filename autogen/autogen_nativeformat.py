@@ -1,21 +1,16 @@
 from binaryninja import *
-from .utils import *
-from .dotnet_enums import *
-from .flags import *
-
-#this contains the various handle types in
-
+from ..utils import *
+from ..dotnet_enums import *
+from .autogen_nativeformat_enums import *
 
 #https://github.com/dotnet/runtime/blob/ecd5ee7277b1eb33bed4cc91ce7abee609bbbd71/src/coreclr/nativeaot/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L17
 
 #the RuntimeTypeHandle is basically a shitty wrapper around MethodTable
 
+#TODO: This needs to be moved to its own class as this si not part of the 
 class RuntimeTypeHandle:
     def __init__(self, value):  
         self.val = value #the value is the vtable for that object
-        
-    # may need to get updated
-    # see: https://github.com/dotnet/runtime/blob/f11dfc95e67ca5ccb52426feda922fe9bcd7adf4/src/libraries/System.Private.CoreLib/src/System/IntPtr.cs#L90
     
     def GetHashCode(self):
         return self.__hash__()
@@ -76,11 +71,10 @@ class NativeFormatHandle:
     #This method should NEVER be called directly. Instead, it should be called by a subclass
     #Pulled from https://github.com/dotnet/runtime/blob/e133fe4f5311c0397f8cc153bada693c48eb7a9f/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L101
     #returns the new offset as well as the newly created handle
-    def Read(reader, offset, subclass):
+    def Read(reader, offset, handle_type):
         (offset, value) = reader.DecodeUnsigned(offset)
-        handle = subclass(value)
+        handle = handle_type(value)
         return (offset, handle)
-
 
 class NativeFormatCollection:
     def __init__(self, reader, offset):
@@ -89,12 +83,44 @@ class NativeFormatCollection:
 
     # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L62
     #returns the new offset and the newly created collection
+    #All collections have the same Read. The only difference is the actual type of the collection that is returned, so emulate that
     def Read(reader, offset, subclass):
-        values = subclass(reader, offset) #this subclass shit is a bit scuffed but this is basically how the code does it
+        values = subclass(reader, offset) 
         (offset, count) = reader.DecodeUnsigned(offset)
         for _ in range(count):
             offset = reader.SkipInteger(offset)
         return (offset, values)
+    
+    
+    #The rest of the NativeFormatCollection stuff was pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/ReaderGen.cs#L184
+    @property
+    def count(self):
+        (_, count) = self.reader.DecodeUnsigned(self.offset)
+        return s32(count)
+    
+    class Enumerator:
+        def __init__(self, reader, offset, elem_type):
+            self.reader = reader
+            self.offset = offset
+            (self.offset, self.remaining) = reader.DecodeUnsigned(self.offset)
+            self.elem_type = elem_type #elem_type is a custom type that denotes the element that this is a collection of
+        
+        def __iter__(self):
+            return self
+        
+        def __next__(self):
+            if self.remaining == 0:
+                raise StopIteration
+            self.remaining -= 1
+            (self.offset, current) = self.elem_type.Read(self.reader, self.offset)
+            return current
+    
+
+
+
+'''
+------ScopeDefinition------
+'''
 
 #https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L6193
 class ScopeDefinitionHandleCollection(NativeFormatCollection):
@@ -105,6 +131,21 @@ class ScopeDefinitionHandleCollection(NativeFormatCollection):
         values = ScopeDefinitionHandleCollection(reader, offset)
         offset = NativeFormatCollection.Read(reader, offset, __class__)
         return (offset, values)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, ScopeDefinition)
+    
+#https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L4575
+class ScopeDefinition:
+    pass
+
+class ScopeDefinitionHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.ScopeDefinition or self._hType == HandleType.Null
+    
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
 
 #https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5572
 class ParameterHandleCollection(NativeFormatCollection):
@@ -131,6 +172,10 @@ class CustomAttributeHandleCollection(NativeFormatCollection):
         return NativeFormatCollection.Read(reader, offset, __class__)
         
     
+'''
+------Method------
+'''    
+
 # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3175
 class Method:
     def __init__(self, reader, handle):
@@ -141,7 +186,6 @@ class Method:
         (offset, self.flags) = MethodAttributes.Read(streamReader, offset)
         (offset, self.implFlags) = MethodImplAttributes.Read(streamReader, offset)
         (offset, self.name) = ConstantStringValueHandle.Read(streamReader, offset) 
-        #print('name',hex(streamReader.base + self.name.Offset))
         (offset, self.signature) = MethodSignatureHandle.Read(streamReader, offset) 
         (offset, self.parameters) = ParameterHandleCollection.Read(streamReader, offset)
         (offset, self.genericParameters) = GenericParameterHandleCollection.Read(streamReader, offset)
@@ -159,6 +203,10 @@ class MethodHandle(NativeFormatHandle):
     def Read(reader, offset):
         (offset, value) = NativeFormatHandle.Read(reader, offset, __class__)
 
+
+'''
+------ConstantString------
+'''
 #this was retrieved from the disassembly
 class ConstantStringValue:
     def __init__(self, reader, handle):
@@ -181,7 +229,10 @@ class ConstantStringValueHandle(NativeFormatHandle):
         return ConstantStringValue(metadataReader, self)
     
 
-    
+'''
+------MethodSignature------
+'''
+
 # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3480
 class MethodSignatureHandle(NativeFormatHandle):
     def __init__(self, value):
@@ -190,6 +241,7 @@ class MethodSignatureHandle(NativeFormatHandle):
     
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
+
 
 
 '''

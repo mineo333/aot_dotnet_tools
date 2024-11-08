@@ -2,8 +2,8 @@ from binaryninja import *
 from .nativeformat import *
 from .utils import *
 from .rtr import *
-from .handles import *
-from .flags import *
+from .autogen.autogen_nativeformat import *
+from .autogen.autogen_nativeformat_enums import *
 
 '''
 random, but important classes that don't really have a place

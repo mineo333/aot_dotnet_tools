@@ -2,7 +2,7 @@ from binaryninja import *
 from .utils import *
 from .rtr import *
 from .dotnet_enums import *
-from .handles import *
+from .autogen.autogen_nativeformat import *
 
 '''
 This file constitutes all the native format parsers

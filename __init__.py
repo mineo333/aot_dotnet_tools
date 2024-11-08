@@ -7,9 +7,9 @@ from .utils import *
 from .method_parser import *
 from .nativeformat import *
 from .dotnet_enums import *
-from .handles import *
+from .autogen.autogen_nativeformat import *
 from .misc import *
-from .flags import *
+from .autogen.autogen_nativeformat_enums import *
 import importlib
 
 def doit(bv):
@@ -38,5 +38,5 @@ def reload_all():
     importlib.reload(nativeformat)
     importlib.reload(dotnet_enums)
     importlib.reload(misc)
-    importlib.reload(flags)
-    importlib.reload(handles)
+    importlib.reload(autogen.autogen_nativeformat_enums)
+    importlib.reload(autogen.autogen_nativeformat)

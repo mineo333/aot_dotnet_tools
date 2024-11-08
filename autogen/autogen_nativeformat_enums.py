@@ -1,7 +1,14 @@
 from binaryninja import *
-from .nativeformat import *
+from ..nativeformat import *
 
 
+
+
+
+#Many of these are NativeFormatEnums
+#The read associated with all of these is https://github.com/dotnet/runtime/blob/e133fe4f5311c0397f8cc153bada693c48eb7a9f/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L91
+
+#https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Reflection/MethodAttributes.cs#L7
 class MethodAttributes(Flag):
     # Member access mask
     MemberAccessMask = 0x0007
@@ -73,3 +80,6 @@ class MethodImplAttributes(Flag):
     def Read(reader, offset):
         (offset, value) = reader.DecodeUnsigned(offset)
         return (offset, MethodImplAttributes(value))
+    
+    
+

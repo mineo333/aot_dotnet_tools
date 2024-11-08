@@ -1,11 +1,8 @@
 from binaryninja import *
-import struct
-import ctypes
-from enum import IntEnum, Flag
 from .dotnet_enums import *
 from .nativeformat import *
 from .rtr import *
-from .handles import *
+from .autogen.autogen_nativeformat import *
 from .misc import *
 
 #this comes from here: https://github.com/dotnet/runtime/blob/c43fc8966036678d8d603bdfbd1afd79f45b420b/src/coreclr/nativeaot/System.Private.Reflection.Execution/src/Internal/Reflection/Execution/ExecutionEnvironmentImplementation.MappingTables.cs#L643
@@ -50,6 +47,7 @@ def parse_invokemap(invokeMapStart, invokeMapEnd):
             print('name', method.name.GetConstantStringValue(METADATA_READER()))
         
     return
+
 
 
 def parse_methods():
