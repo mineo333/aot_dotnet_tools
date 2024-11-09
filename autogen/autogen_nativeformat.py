@@ -2,6 +2,7 @@ from binaryninja import *
 from ..utils import *
 from ..dotnet_enums import *
 from .autogen_nativeformat_enums import *
+from .autogen_nativeformat_primitives import *
 
 #https://github.com/dotnet/runtime/blob/ecd5ee7277b1eb33bed4cc91ce7abee609bbbd71/src/coreclr/nativeaot/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L17
 
@@ -70,12 +71,13 @@ class NativeFormatHandle:
     
     #This method should NEVER be called directly. Instead, it should be called by a subclass
     #Pulled from https://github.com/dotnet/runtime/blob/e133fe4f5311c0397f8cc153bada693c48eb7a9f/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L101
-    #returns the new offset as well as the newly created handle
+    #returns the new offset as well as the newly created handle. All handles have the same read. The only difference is the returned object - the underlying value is read the same way
     def Read(reader, offset, handle_type):
         (offset, value) = reader.DecodeUnsigned(offset)
         handle = handle_type(value)
         return (offset, handle)
 
+#This class is intended for Handle collections. Evidence for this can be seen here: 
 class NativeFormatCollection:
     def __init__(self, reader, offset):
         self.reader = reader
@@ -83,7 +85,7 @@ class NativeFormatCollection:
 
     # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L62
     #returns the new offset and the newly created collection
-    #All collections have the same Read. The only difference is the actual type of the collection that is returned, so emulate that
+    #All collections have the same Read. The only difference is the actual type of the collection that is returned
     def Read(reader, offset, subclass):
         values = subclass(reader, offset) 
         (offset, count) = reader.DecodeUnsigned(offset)
@@ -98,6 +100,7 @@ class NativeFormatCollection:
         (_, count) = self.reader.DecodeUnsigned(self.offset)
         return s32(count)
     
+    #All enumerators are the same except the type that is read upon going next
     class Enumerator:
         def __init__(self, reader, offset, elem_type):
             self.reader = reader
@@ -133,19 +136,85 @@ class ScopeDefinitionHandleCollection(NativeFormatCollection):
         return (offset, values)
     
     def GetEnumerator(self):
-        return NativeFormatCollection.Enumerator(self.reader, self.offset, ScopeDefinition)
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, ScopeDefinitionHandle)
     
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L4575
 class ScopeDefinition:
-    pass
-
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        offset = handle.Offset
+        streamReader = reader.streamReader
+        (offset, self.flags) = AssemblyFlags.Read(streamReader, offset)
+        (offset, self.name) = ConstantStringValueHandle.Read(streamReader, offset)
+        (offset, self.hashAlgorithm) = AssemblyHashAlgorithm.Read(streamReader, offset)
+        (offset, self.majorVersion) = UInt16.Read(streamReader, offset)
+        (offset, self.minorVersion) = UInt16.Read(streamReader, offset)
+        (offset, self.buildNumber) = UInt16.Read(streamReader, offset)
+        (offset, self.revisionNumber) = UInt16.Read(streamReader, offset)
+        (offset, self.publicKey) =  ByteCollection.Read(streamReader, offset)
+        (offset, self.culture) = ConstantStringValueHandle.Read(streamReader, offset)
+        (offset, self.rootNamespaceDefinition) = NamespaceDefinitionHandle.Read(streamReader, offset)
+        (offset, self.entryPoint) = QualifiedMethodHandle.Read(streamReader, offset)
+        (offset, self.globalModuleType) = TypeDefinitionHandle.Read(streamReader, offset)
+        (offset, self.customAttributes) = CustomAttributeHandleCollection.Read(streamReader, offset)
+        (offset, self.moduleName) = ConstantStringValueHandle.Read(streamReader, offset)
+        (offset, self.mvid) = ByteCollection.Read(streamReader, offset)
+        (offset, self.moduleCustomAttributes) = CustomAttributeHandleCollection.Read(streamReader, offset)
+        
+#https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L4658
 class ScopeDefinitionHandle(NativeFormatHandle):
     def __init__(self, value):
         super().__init__(value)
         assert self._hType == 0 or self._hType == HandleType.ScopeDefinition or self._hType == HandleType.Null
-    
+
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
+    
+    def GetScopeDefinition(self, reader):
+        return ScopeDefinition(reader, self)
+    
+'''
+NamespaceDefinition
+'''
+
+class NamespaceDefinitionHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.NamespaceDefinition or self._hType == HandleType.Null
+
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+    
+'''
+QualifiedMethod
+'''
+
+class QualifiedMethodHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.QualifiedMethod or self._hType == HandleType.Null
+
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+    
+'''
+TypeDefinition
+'''
+
+class TypeDefinitionHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.TypeDefinition or self._hType == HandleType.Null
+
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+    
+
+    
+'''
+Parameter
+'''
 
 #https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5572
 class ParameterHandleCollection(NativeFormatCollection):
@@ -154,6 +223,10 @@ class ParameterHandleCollection(NativeFormatCollection):
     
     def Read(reader, offset):
         return NativeFormatCollection.Read(reader, offset, __class__)
+
+'''
+Generic Parameter
+'''
         
 #https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5641
 class GenericParameterHandleCollection(NativeFormatCollection):
@@ -162,6 +235,11 @@ class GenericParameterHandleCollection(NativeFormatCollection):
     
     def Read(reader, offset):
         return NativeFormatCollection.Read(reader, offset, __class__)
+
+
+'''
+CustomAttribute
+'''
 
 #https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5503
 class CustomAttributeHandleCollection(NativeFormatCollection):
@@ -190,6 +268,7 @@ class Method:
         (offset, self.parameters) = ParameterHandleCollection.Read(streamReader, offset)
         (offset, self.genericParameters) = GenericParameterHandleCollection.Read(streamReader, offset)
         (offset, self.customAttributes) = CustomAttributeHandleCollection.Read(streamReader, offset)
+        
 
 # pulled from: https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3221
 class MethodHandle(NativeFormatHandle):
@@ -212,7 +291,7 @@ class ConstantStringValue:
     def __init__(self, reader, handle):
         self.reader = reader
         streamReader = reader.streamReader
-        (_, self.value) = streamReader.DecodeString(handle.Offset)
+        (_, self.value) = String.Read(streamReader, handle.Offset)
     def __str__(self):
         return self.value
     
@@ -241,6 +320,121 @@ class MethodSignatureHandle(NativeFormatHandle):
     
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
+
+
+'''
+------Primitive Collections------
+
+These are output here: https://github.com/dotnet/runtime/blob/e133fe4f5311c0397f8cc153bada693c48eb7a9f/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/ReaderGen.cs#L55
+'''
+    
+#The difference between this and a normal NativeCollection is that a NativePrimitiveCollection
+class NativePrimitiveCollection:
+    def __init__(self, reader, offset):
+        self.reader = reader
+        self.offset = offset
+    
+    #This Read comes from here: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L78
+    def Read(reader, offset, subclass, elem):
+        values = subclass(reader, offset)
+        (offset, count) = reader.DecodeUnsigned(offset)
+        offset = offset + count * elem.SIZE
+        return (offset, values)
+
+    #The enumerator is exactly the same between NativeFormatCollection and NativePrimitiveCollection
+    #This is evidenced by the fact that you use the same method to emit stuff for Handle collections and primitive collections: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/ReaderGen.cs#L48
+    
+class CharCollection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, Char)
+    
+    def GetEnumerator(self):
+        
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, Char)
+    
+class Int16Collection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, Int16)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, Int16)
+    
+class SByteCollection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, SByte)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, SByte)
+
+
+class UInt64Collection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, UInt64)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, UInt64)
+    
+class Int32Collection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, Int32)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, Int32)
+    
+class UInt32Collection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, UInt32)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, UInt32)
+    
+class ByteCollection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, Byte)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, Byte)
+
+class UInt16Collection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, UInt16)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, UInt16)
+    
+class Int16Collection(NativePrimitiveCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+        
+    def Read(reader, offset):
+        return NativePrimitiveCollection.Read(reader, offset, __class__, Int16)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, Int16)
 
 
 

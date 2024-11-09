@@ -27,8 +27,6 @@ def parse_invokemap(invokeMapStart, invokeMapEnd):
         if entryFlags & InvokeTableFlags.NeedsParameterInterpretation == 0:
             entryParser.SkipInteger()
 
-
-
         if entryFlags & InvokeTableFlags.RequiresInstArg == 0:
             declaringTypeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(entryDeclaringTypeRaw)
         else:
@@ -45,15 +43,23 @@ def parse_invokemap(invokeMapStart, invokeMapEnd):
             methodHandle = QMethodDefinition(qTypeDefinition.NativeFormatReader, nativeFormatMethodHandle)
             method = methodHandle.handle.GetMethod(METADATA_READER())
             print('name', method.name.GetConstantStringValue(METADATA_READER()))
-        
-    return
 
+def get_all_methods():
+    metadata_reader = METADATA_READER()
+    scope_definitions = metadata_reader.header.SCOPE_DEFINITIONS
+    
+    for scope_definition_handle in scope_definitions.GetEnumerator():
+        print('scope handle:', scope_definition_handle)
+        scope_definition = scope_definition_handle.GetScopeDefinition(metadata_reader)
+        print('scope def', scope_definition)
+        print(scope_definition.name.GetConstantStringValue(metadata_reader))
 
 
 def parse_methods():
     create_metadata_reader()
     (start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
-    parse_invokemap(start, end)
+    #parse_invokemap(start, end)
+    get_all_methods()
 
 
 

@@ -47,7 +47,13 @@ def s64(val):
 
 def u64(val):
     return ctypes.c_ulong(val).value
+
+def u16(val):
+    return ctypes.c_ushort(val).value
     
+def s16(val):
+    return ctypes.c_short(val).value
+
 def initialize_utils(bv):
     global READER
     READER = bv.reader(0)

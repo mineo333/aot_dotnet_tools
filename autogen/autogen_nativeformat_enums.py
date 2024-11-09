@@ -48,7 +48,7 @@ class MethodAttributes(Flag):
 
     def Read(reader, offset):
         (offset, value) = reader.DecodeUnsigned(offset)
-        return (offset, MethodAttributes(value))
+        return (offset, __class__(value))
     
 class MethodImplAttributes(Flag):
     # Code impl mask
@@ -79,7 +79,22 @@ class MethodImplAttributes(Flag):
 
     def Read(reader, offset):
         (offset, value) = reader.DecodeUnsigned(offset)
-        return (offset, MethodImplAttributes(value))
+        return (offset, __class__(value))
     
+#https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderCommonGen.cs#L22
+class AssemblyFlags(Flag):
+    PublicKey = 0x1
+    Retargetable = 0x100
+    ContentTypeMask = 0x00000e00
+    def Read(reader, offset):
+        (offset, value) = reader.DecodeUnsigned(offset)
+        return (offset, __class__(value))
     
-
+class AssemblyHashAlgorithm(Flag):
+    none = 0x0 
+    Reserved = 0x8003
+    SHA1 = 0x8004
+    def Read(reader, offset):
+        (offset, value) = reader.DecodeUnsigned(offset)
+        return (offset, __class__(value))
+    
