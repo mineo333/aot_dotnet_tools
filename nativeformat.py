@@ -214,7 +214,6 @@ class NativeHashTable:
         if (number_of_buckets_shift > 31):
             raise ValueError("Bad image format exception") 
         self.bucket_mask = (1 << number_of_buckets_shift) - 1
-
         entry_index_size = header & 3
         
         if (entry_index_size > 2):
@@ -236,7 +235,6 @@ class NativeHashTable:
         def __next__(self):
             while (True):
                 while (self.parser.offset < self.end_offset):
-                    
                     self.parser.GetUInt8() #skip hashcode
                     return self.parser.GetParserFromRelativeOffset()
                 if (self.current_bucket >= self.table.bucket_mask):

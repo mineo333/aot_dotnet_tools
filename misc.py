@@ -110,7 +110,6 @@ class TypeLoaderEnvironment:
         pass
 
     def TryGetMetadataForNamedType(runtimeTypeHandle): # return QTypeDefinition
-        global METADATA_READER
         #note we only use the current module
         hashcode = runtimeTypeHandle.GetHashCode()
         #print('hashcode', hex(hashcode))
@@ -126,7 +125,7 @@ class TypeLoaderEnvironment:
             idx = entryParser.GetUnsigned()
             foundType = externalReferences.GetRuntimeTypeHandleFromIndex(idx)
             if foundType == runtimeTypeHandle:
-                entryMetadataHandle = NativeFormatHandle(entryParser.GetUnsigned())
+                entryMetadataHandle = Handle(entryParser.GetUnsigned())
                 if entryMetadataHandle.hType == HandleType.TypeDefinition:
                     metadataReader = METADATA_READER()
                     return (True, QTypeDefinition(metadataReader, entryMetadataHandle))

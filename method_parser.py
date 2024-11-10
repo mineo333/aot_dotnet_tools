@@ -53,13 +53,34 @@ def get_all_methods():
         scope_definition = scope_definition_handle.GetScopeDefinition(metadata_reader)
         print('scope def', scope_definition)
         print(scope_definition.name.GetConstantStringValue(metadata_reader))
+        
+def get_all_types():
+    metadata_reader = METADATA_READER()
+    (typeMapStart, typeMapEnd) = find_section_start_end(ReflectionMapBlob.TypeMap)
+    typeMapReader = NativeReader(typeMapStart, typeMapEnd-typeMapStart)
+    typeMapParser = NativeParser(typeMapReader, 0)
+    typeMapHashtable = NativeHashTable(typeMapParser)
+    externalReferences = ExternalReferencesTable(ReflectionMapBlob.CommonFixupsTable)
+    enumerator = NativeHashTable.AllEntriesEnumerator(typeMapHashtable) 
+    for entryParser in enumerator:
+        idx = entryParser.GetUnsigned()
+        typeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(idx)
+        print(typeHandle)
+        hVal = entryParser.GetUnsigned()
+        entryMetadataHandle = Handle(hVal)
+        if entryMetadataHandle.hType == HandleType.TypeDefinition:
+            typedef_handle = TypeDefinitionHandle(hVal)
+            typedef = typedef_handle.GetTypeDefinition(metadata_reader)
+            print(typedef.name.GetConstantStringValue(metadata_reader))
+        
 
 
 def parse_methods():
     create_metadata_reader()
     (start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
     #parse_invokemap(start, end)
-    get_all_methods()
+    #get_all_methods()
+    get_all_types()
 
 
 
