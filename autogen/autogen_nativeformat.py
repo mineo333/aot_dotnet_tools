@@ -197,6 +197,9 @@ class NamespaceDefinitionHandle(NativeFormatHandle):
 
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
+    
+    def GetNamespaceDefinition(self, reader):
+        return NamespaceDefinition(reader, self)
 
 #https://github.com/dotnet/runtime/blob/main/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3793
 class NamespaceDefinition:
@@ -208,7 +211,34 @@ class NamespaceDefinition:
         (offset, self.parentScopeOrNamespace) = Handle.Read(streamReader, offset)
         (offset, self.name) = ConstantStringValueHandle.Read(streamReader, offset)
         (offset, self.typeDefinitions) = TypeDefinitionHandleCollection.Read(streamReader, offset)
-        #(offset, self.)
+        (offset, self.typeForwarders) = TypeForwarderHandleCollection.Read(streamReader, offset)
+        (offset, self.namespaceDefinitions) = NamespaceDefinitionHandleCollection.Read(streamReader, offset)
+        
+class NamespaceDefinitionHandleCollection(NativeFormatCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+    
+    def Read(reader, offset):
+        return NativeFormatCollection.Read(reader, offset, __class__)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, NamespaceDefinitionHandle)
+
+
+'''
+TypeForwarder
+'''
+
+class TypeForwarderHandleCollection(NativeFormatCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+    
+    def Read(reader, offset):
+        return NativeFormatCollection.Read(reader, offset, __class__)
+    
+    #def GetEnumerator(self):
+    #    return NativeFormatCollection.Enumerator(self.reader, self.offset, TypeForwarderHandle)
+    
 
     
 '''
@@ -258,12 +288,43 @@ class TypeDefinition:
         self.handle = handle
         offset = handle.Offset
         streamReader = reader.streamReader
-        (offset, self.flags) = streamReader.DecodeUnsigned(offset)#TypeAttributes.Read(streamReader, offset)
+        (offset, self.flags) = streamReader.DecodeUnsigned(offset)#TypeAttributes.Read(streamReader, offset) - TODO: TypeAttributes is broken
         (offset, self.baseType) = Handle.Read(streamReader, offset)
         (offset, self.namespaceDefinition) = NamespaceDefinitionHandle.Read(streamReader, offset)
         (offset, self.name) = ConstantStringValueHandle.Read(streamReader, offset)
+        (offset, self.size) = UInt32.Read(streamReader, offset)
+        (offset, self.packingSize) = UInt16.Read(streamReader, offset)
+        (offset, self.enclosingType) = TypeDefinitionHandle.Read(streamReader, offset)
+        (offset, self.nestedTypes) = TypeDefinitionHandleCollection.Read(streamReader, offset)
+        (offset, self.methods) = MethodHandleCollection.Read(streamReader, offset)
+        (offset, self.fields) = FieldHandleCollection.Read(streamReader, offset)
+        #(offset, self.properties) = PropertyHandleCollection.Read(streamReader, offset)
+        #(offset, self.events) = EventHandleCollection.Read(streamReader, offset)
         
+
+'''
+Event
+'''
+
+#https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5572
+class EventHandleCollection(NativeFormatCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
     
+    def Read(reader, offset):
+        return NativeFormatCollection.Read(reader, offset, __class__)
+        
+'''
+Field
+'''
+
+#https://github.com/dotnet/runtime/blob/a72cfb0ee2669abab031c5095a670678fd0b7861/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5572
+class FieldHandleCollection(NativeFormatCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+    
+    def Read(reader, offset):
+        return NativeFormatCollection.Read(reader, offset, __class__)
 
     
 '''
@@ -335,7 +396,17 @@ class MethodHandle(NativeFormatHandle):
         return Method(reader, self)
     
     def Read(reader, offset):
-        (offset, value) = NativeFormatHandle.Read(reader, offset, __class__)
+        return NativeFormatHandle.Read(reader, offset, __class__)
+        
+class MethodHandleCollection(NativeFormatCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+    
+    def Read(reader, offset):
+        return NativeFormatCollection.Read(reader, offset, __class__)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, MethodHandle)
 
 
 '''
@@ -354,13 +425,14 @@ class ConstantStringValue:
 class ConstantStringValueHandle(NativeFormatHandle):
     def __init__(self, value):
         super().__init__(value)
-        assert self._hType == 0 or self._hType == HandleType.ConstantStringValue or self._hType == HandleType.Null
+        assert self._hType == 0 or self._hType == HandleType.NamespaceDefinition or self._hType == HandleType.Null
 
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
     
     def GetConstantStringValue(self, metadataReader):
         return ConstantStringValue(metadataReader, self)
+            
     
 
 '''

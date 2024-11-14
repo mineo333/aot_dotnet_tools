@@ -47,13 +47,38 @@ def parse_invokemap(invokeMapStart, invokeMapEnd):
 def get_all_methods():
     metadata_reader = METADATA_READER()
     scope_definitions = metadata_reader.header.SCOPE_DEFINITIONS
+    bfs = list() #list of namespace definition handles
     
     for scope_definition_handle in scope_definitions.GetEnumerator():
-        print('scope handle:', scope_definition_handle)
-        scope_definition = scope_definition_handle.GetScopeDefinition(metadata_reader)
-        print('scope def', scope_definition)
-        print(scope_definition.name.GetConstantStringValue(metadata_reader))
+        scope_defintion = scope_definition_handle.GetScopeDefinition(metadata_reader)
+        print(scope_defintion.name.GetConstantStringValue(metadata_reader))
+        #if 'fullspeed' in str(scope_defintion.name.GetConstantStringValue(metadata_reader)):
+        bfs.append(scope_defintion.rootNamespaceDefinition)
         
+    
+    while len(bfs) != 0:
+        elem = bfs[0]
+        bfs = bfs[1:]
+        ns_def = elem.GetNamespaceDefinition(metadata_reader)
+        try:
+            print(ns_def.name.GetConstantStringValue(metadata_reader))
+        except:
+            pass
+        
+        for type_def_handle in ns_def.typeDefinitions.GetEnumerator():
+            type_def = type_def_handle.GetTypeDefinition(metadata_reader)
+            print('type', type_def.name.GetConstantStringValue(metadata_reader))
+            for method_handle in type_def.methods.GetEnumerator():
+                method = method_handle.GetMethod(metadata_reader)
+                print('method', method.name.GetConstantStringValue(metadata_reader))
+            
+            for nested_type_handle in type_def.nestedTypes.GetEnumerator():
+                nested_type_def = nested_type_handle.GetTypeDefinition(metadata_reader)
+                print('nested type', nested_type_def.name.GetConstantStringValue(metadata_reader))
+        
+        for ns_def_handle in ns_def.namespaceDefinitions.GetEnumerator():
+            bfs.append(ns_def_handle)
+
 def get_all_types():
     metadata_reader = METADATA_READER()
     (typeMapStart, typeMapEnd) = find_section_start_end(ReflectionMapBlob.TypeMap)
@@ -70,8 +95,17 @@ def get_all_types():
         entryMetadataHandle = Handle(hVal)
         if entryMetadataHandle.hType == HandleType.TypeDefinition:
             typedef_handle = TypeDefinitionHandle(hVal)
-            typedef = typedef_handle.GetTypeDefinition(metadata_reader)
-            print(typedef.name.GetConstantStringValue(metadata_reader))
+            type_def = typedef_handle.GetTypeDefinition(metadata_reader)
+            print('type', type_def.name.GetConstantStringValue(metadata_reader))
+            print('num methods', type_def.methods.count)
+            
+            for method_handle in type_def.methods.GetEnumerator():
+                method = method_handle.GetMethod(metadata_reader)
+                print('method', method.name.GetConstantStringValue(metadata_reader))
+            
+            for nested_type_handle in type_def.nestedTypes.GetEnumerator():
+                nested_type_def = nested_type_handle.GetTypeDefinition(metadata_reader)
+                print('nested type', nested_type_def.name.GetConstantStringValue(metadata_reader))
         
 
 
