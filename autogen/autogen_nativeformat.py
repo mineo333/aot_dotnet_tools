@@ -425,7 +425,7 @@ class ConstantStringValue:
 class ConstantStringValueHandle(NativeFormatHandle):
     def __init__(self, value):
         super().__init__(value)
-        assert self._hType == 0 or self._hType == HandleType.NamespaceDefinition or self._hType == HandleType.Null
+        assert self._hType == 0 or self._hType == HandleType.ConstantStringValue or self._hType == HandleType.Null
 
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)

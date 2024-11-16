@@ -109,12 +109,27 @@ def get_all_types():
         
 
 
+def brute_force(offset, HandleType):
+    metadata_reader = METADATA_READER()
+    streamReader = metadata_reader.streamReader
+    endOffset = streamReader.size
+    for i in range(endOffset): #check every possible offset for our target value
+        try:
+            (_,handle) = Handle.Read(streamReader, i)
+        except:
+            continue
+        if handle.Offset == offset:
+            print('found handle at offset', hex(i))
+            print('address', hex(streamReader.base + i))
+    print('Could find the offset')
+
 def parse_methods():
     create_metadata_reader()
     (start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
     #parse_invokemap(start, end)
     #get_all_methods()
-    get_all_types()
+    #get_all_types()
+    brute_force(0xc9b3, ConstantStringValueHandle)
 
 
 

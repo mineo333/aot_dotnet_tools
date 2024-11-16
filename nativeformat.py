@@ -128,6 +128,14 @@ class NativeParser:
         self.offset += 1
         return val
     
+    def GetUInt32(self):
+        val = self.reader.ReadUInt32(self.offset)
+        self.offset += 4
+        return val
+    
+    def Seek(self, offset):
+        self.offset += offset
+    
     def GetUnsigned(self):
         (self.offset, val) = self.reader.DecodeUnsigned(self.offset)
         return val
@@ -172,7 +180,6 @@ Each bucket offset can either be 1, 2, or 4 bytes (In the case of Flare-On it is
 The [bucket offsets] section is an array of bucket offsets. We essentially use a sliding window to determine the start and end of each bucket. For example, support bucket offsets is: {0x0, 0x10, 0x20, 0x30}
 
 Then, the start/end of bucket 0 is (0, 0x10), the start/end of bucket 1 is (0x10, 0x20), etc.
-
 
 We then add the start of the bucket to base_offset and that serves as the array of offsets for each element in that bucket. Each offset in that array is a relative offset (Meaning it is calculated with DecodeSigned + offset). Each offset is seperated by the "low hashcode" of that object (First byte of the hashcode)
 

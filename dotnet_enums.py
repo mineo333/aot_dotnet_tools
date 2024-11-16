@@ -130,3 +130,11 @@ class HandleType(IntEnum):
     TypeReference = 0x3d
     TypeSpecification = 0x3e
     TypeVariableSignature = 0x3f  
+    
+
+class StackTraceDataCommand(Flag):
+    UpdateOwningType = 0x01
+    UpdateName = 0x02
+    UpdateSignature = 0x04
+    UpdateGenericSignature = 0x08
+    IsStackTraceHidden = 0x10

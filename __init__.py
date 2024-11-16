@@ -9,6 +9,7 @@ from .nativeformat import *
 from .dotnet_enums import *
 from .autogen.autogen_nativeformat import *
 from .misc import *
+from .stacktrace_parser import *
 from .autogen.autogen_nativeformat_enums import *
 
 import importlib
@@ -19,7 +20,8 @@ def doit(bv):
     rtr.populate_sections(bv)
     rehydrate.do_rehydration(bv)
     nativeformat.create_metadata_reader()
-    method_parser.parse_methods()
+    #method_parser.parse_methods()
+    stacktrace_parser.stacktrace_metadata_dumper()
 
 
 '''
@@ -41,3 +43,4 @@ def reload_all():
     importlib.reload(misc)
     importlib.reload(autogen.autogen_nativeformat_enums)
     importlib.reload(autogen.autogen_nativeformat)
+    importlib.reload(stacktrace_parser)
