@@ -6,6 +6,8 @@ from .autogen_nativeformat_primitives import *
 
 #https://github.com/dotnet/runtime/blob/ecd5ee7277b1eb33bed4cc91ce7abee609bbbd71/src/coreclr/nativeaot/System.Private.CoreLib/src/System/RuntimeTypeHandle.cs#L17
 
+#MethodTable: https://github.com/dotnet/runtime/blob/10ee2b11e94acf23fe17fe36d2dbc2db588f06ec/src/coreclr/nativeaot/Runtime/inc/MethodTable.h#L82
+
 #the RuntimeTypeHandle is basically a shitty wrapper around MethodTable
 
 #TODO: This needs to be moved to its own class as this si not part of the 

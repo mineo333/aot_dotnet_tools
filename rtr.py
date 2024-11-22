@@ -83,7 +83,7 @@ def initialize_types(bv):
         module_info_row.append(Type.pointer(bv.arch, Type.void()), 'End')
         bv.define_type(Type.generate_auto_type_id('source', 'ModuleInfoRow'), 'ModuleInfoRow', module_info_row.immutable_copy())
         
-        
+#This is similar to this code: https://github.com/dotnet/runtime/blob/a3fe47ef1a8def24e8d64c305172199ae5a4ed07/src/coreclr/tools/aot/ILCompiler.Reflection.ReadyToRun/ReadyToRunHeader.cs#L93
 def populate_sections(bv):
     global SECTIONS
     rdata_address = bv.sections['.rdata'].start #the ReadyToRun header is always in rdata
