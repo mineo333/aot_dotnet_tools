@@ -306,7 +306,6 @@ class MetadataHeader:
 
     SCOPE_DEFINITIONS = None
     
-    # Decode defintion was found in the assembly
     def Decode(self, reader):
         if reader.ReadUInt32(0) != self.SIGNATURE:
             raise ValueError("Bad Image Format Exception")

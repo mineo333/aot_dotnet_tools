@@ -31,23 +31,21 @@ def stacktrace_metadata_dumper():
             
         if StackTraceDataCommand.UpdateName in command:
             val = s32(parser.GetUnsigned())
-            val = val | HandleType.ConstantStringValue << 24 #manually construct handle
-            currentName = ConstantStringValueHandle(val)
+            currentName = ConstantStringValueHandle(Handle(val, hType=HandleType.ConstantStringValue))
             
         if StackTraceDataCommand.UpdateSignature in command:
             val = s32(parser.GetUnsigned())
-            val = val | HandleType.MethodSignature << 24 #manually construct handle
-            currentSignature = Handle(val)
+            #val = val | HandleType.MethodSignature << 24 #manually construct handle
+            currentSignature = Handle(val, hType=HandleType.MethodSignature)
             currentMethodInst = None
         
         if StackTraceDataCommand.UpdateGenericSignature in command:
             val = s32(parser.GetUnsigned())
-            val = val | HandleType.MethodSignature << 24 #manually construct handle
-            currentSignature = Handle(val)
-            
+            #val = val | HandleType.MethodSignature << 24 #manually construct handle
+            currentSignature = Handle(val, hType=HandleType.MethodSignature)
             val = s32(parser.GetUnsigned())
-            val = val | HandleType.ConstantStringArray << 24 #manually construct handle
-            currentMethodInst = Handle(val)
+            #val = val | HandleType.ConstantStringArray << 24 #manually construct handle
+            currentMethodInst = Handle(val, hType=HandleType.ConstantStringArray)
         
         pMethod = ReadRelPtr32(parser.GetAddress())
         parser.Seek(4)

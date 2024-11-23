@@ -90,7 +90,7 @@ def get_all_types():
     for entryParser in enumerator:
         idx = entryParser.GetUnsigned()
         typeHandle = externalReferences.GetRuntimeTypeHandleFromIndex(idx)
-        print(typeHandle)
+        print('MethodTable', typeHandle)
         hVal = entryParser.GetUnsigned()
         entryMetadataHandle = Handle(hVal)
         if entryMetadataHandle.hType == HandleType.TypeDefinition:

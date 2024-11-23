@@ -53,8 +53,12 @@ On top of that most Handles and Collections have shared handling of data as well
 
 class NativeFormatHandle:
     def __init__(self, value):
-        self._hType = HandleType(value >> 24)
-        self._value = (value & 0x00FFFFFF) | (HandleType.Method << 24)
+        if isinstance(value, NativeFormatHandle): #if it is an instance of NativeFormatHandle then it is a cross-handle cast, so basically just copy it over
+            self._hType = value._hType
+            self._value = value._value
+        else:
+            self._hType = HandleType(value >> 24)
+            self._value = (value & 0x00FFFFFF) | (HandleType.Method << 24)
 
     @property
     def value(self):
@@ -129,9 +133,13 @@ This is used in cases where handles are overloaded such as https://github.com/do
 '''
 
 class Handle(NativeFormatHandle):
-    def __init__(self, value):
-        super().__init__(value)
+    def __init__(self, value, hType=None):
+        if hType != None: #This is used for manually constructing a Handle given a value and a handle type
+            super().__init__(hType << 24 | value)
+        else:
+            super().__init__(value)
 
+    
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
 
