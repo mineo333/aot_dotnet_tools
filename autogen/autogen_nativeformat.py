@@ -48,6 +48,20 @@ Using the Schema, we output the source code for every read here: https://github.
 Looking in the ReaderGen, there are a few "classes" of reads that exist. Firstly, there exists a single read for all Handles, a single read for all Collections, etc. We seek to emulate that in the following code. We have a NativeFormatHandle which is a top-level class for Handles and implements the read for all handle classes. Any handles extend NativeFormatHandle as a subclass. We also have NativeFormatCollection which all collections extend.
 
 On top of that most Handles and Collections have shared handling of data as well as, for the most part, the same members. For example, all handles will always have the top 8 bits be the hType and the bottom 24 bits be the offset. In addition, all types of a certain "class" have the same constructor. 
+
+
+HOW WE TRANSLATE AUTOGEN:
+
+The way autogen works is that, for every type, it generates an extension Read method that outputs that type. The way the Read works depends on the underlying "flavor" of type (i.e., Handle, Collection, Enum). However, the read is the same for any particular flavor. The only difference is the output type.
+
+To reflect that, we create a top-level class for every flavor - NativeFormatHandle for Handle and NativeFormatCollection for Collection. This is the read implementation for Read. The output type is passed as an argument into this read.
+
+Every type extends its flavor's class (i.e., TypeDefinitionHandle extends NativeFormatHandle) and its read implementation simply calls back to its parent's read.
+
+Because we don't have the ability to implement extension methods and we are not autogen-ing, the way you call read is as follows: [output_type].Read(reader, offset)
+
+In other words, suppose we have TypeDefinitionHandle. Then its read will look like Read(this NativeFormatReader reader, uint offset, out TypeDefinitionHandle handle). To do this read in python, you would call TypeDefinitionHandle.Read(reader, offset) as TypeDefinitionHandle is the output type. 
+
 '''
 
 
@@ -80,7 +94,7 @@ class NativeFormatHandle:
     #returns the new offset as well as the newly created handle. All handles have the same read. The only difference is the returned object - the underlying value is read the same way
     def Read(reader, offset, handle_type):
         (offset, value) = reader.DecodeUnsigned(offset)
-        handle = handle_type(value)
+        handle = handle_type(s32(value))
         return (offset, handle)
 
 #This class is intended for Handle collections. Evidence for this can be seen here: 

@@ -51,7 +51,7 @@ def get_all_methods():
     
     for scope_definition_handle in scope_definitions.GetEnumerator():
         scope_defintion = scope_definition_handle.GetScopeDefinition(metadata_reader)
-        print(scope_defintion.name.GetConstantStringValue(metadata_reader))
+        print('Scope', scope_defintion.name.GetConstantStringValue(metadata_reader), scope_defintion.majorVersion)
         #if 'fullspeed' in str(scope_defintion.name.GetConstantStringValue(metadata_reader)):
         bfs.append(scope_defintion.rootNamespaceDefinition)
         
@@ -61,7 +61,7 @@ def get_all_methods():
         bfs = bfs[1:]
         ns_def = elem.GetNamespaceDefinition(metadata_reader)
         try:
-            print(ns_def.name.GetConstantStringValue(metadata_reader))
+            print('Namepace Definition', ns_def.name.GetConstantStringValue(metadata_reader))
         except:
             pass
         
@@ -126,10 +126,10 @@ def brute_force(offset, HandleType):
 def parse_methods():
     create_metadata_reader()
     (start,end) = find_section_start_end(ReflectionMapBlob.InvokeMap)
-    #parse_invokemap(start, end)
+    parse_invokemap(start, end)
     #get_all_methods()
     #get_all_types()
-    brute_force(0xc9b3, ConstantStringValueHandle)
+    #brute_force(0xc9b3, ConstantStringValueHandle)
 
 
 

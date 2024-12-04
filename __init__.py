@@ -20,8 +20,8 @@ def doit(bv):
     rtr.populate_sections(bv)
     rehydrate.do_rehydration(bv)
     nativeformat.create_metadata_reader()
-    #method_parser.parse_methods()
-    stacktrace_parser.stacktrace_metadata_dumper()
+    method_parser.parse_methods()
+    #stacktrace_parser.stacktrace_metadata_dumper()
 
 
 '''
