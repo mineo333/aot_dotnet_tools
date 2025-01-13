@@ -21,8 +21,7 @@ def doit(bv):
     rehydrate.do_rehydration(bv)
     nativeformat.create_metadata_reader()
     #method_parser.parse_methods()
-    stacktrace_parser.stacktrace_metadata_dumper()
-
+    stacktrace_parser.stacktrace_metadata_dumper(bv)
 
 '''
 to reload in binja run the following line in the binja console:

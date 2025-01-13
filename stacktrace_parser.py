@@ -11,7 +11,7 @@ def ReadRelPtr32(address):
 
 
 #based on this method: https://github.com/dotnet/runtime/blob/55eee324653e01cf28809d02b25a5b0894b58d22/src/coreclr/nativeaot/System.Private.StackTraceMetadata/src/Internal/StackTraceMetadata/StackTraceMetadata.cs#L323
-def stacktrace_metadata_dumper():
+def stacktrace_metadata_dumper(bv):
     currentOwningType = None
     currentSignature = None
     currentName = None
@@ -53,7 +53,19 @@ def stacktrace_metadata_dumper():
         
         print('pMethod:', hex(pMethod))
         print('Name', nameStr)
-        
-        
-        
-    
+        if currentOwningType.hType == HandleType.TypeDefinition:
+            typeDefinition = TypeDefinitionHandle(currentOwningType).GetTypeDefinition(metadata_reader)
+            print('Owning type', typeDefinition.name.GetConstantStringValue(metadata_reader))
+        elif currentOwningType.hType == HandleType.TypeReference:
+            print('Type reference')
+        elif currentOwningType.hType == HandleType.TypeSpecification:
+        print('Type specification')
+            
+        #print('Owning Type')
+        bv.add_function(pMethod) # add funciton if one doesn't already exist at pMethod
+        func = bv.get_function_at(pMethod)
+        if func:
+            print(func.name)
+            #func.name = str(nameStr)
+        else:
+            print('No function found at address', pMethod)

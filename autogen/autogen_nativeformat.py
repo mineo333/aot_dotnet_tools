@@ -463,6 +463,13 @@ class ConstantStringValueHandle(NativeFormatHandle):
 ------MethodSignature------
 '''
 
+class MethodSignature:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        offset = u32(handle.Offset)
+        
+
 # pulled from: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3480
 class MethodSignatureHandle(NativeFormatHandle):
     def __init__(self, value):
