@@ -41,10 +41,8 @@ def stacktrace_metadata_dumper(bv):
         
         if StackTraceDataCommand.UpdateGenericSignature in command:
             val = s32(parser.GetUnsigned())
-            #val = val | HandleType.MethodSignature << 24 #manually construct handle
             currentSignature = Handle(val, hType=HandleType.MethodSignature)
             val = s32(parser.GetUnsigned())
-            #val = val | HandleType.ConstantStringArray << 24 #manually construct handle
             currentMethodInst = Handle(val, hType=HandleType.ConstantStringArray)
         
         pMethod = ReadRelPtr32(parser.GetAddress())
@@ -55,17 +53,21 @@ def stacktrace_metadata_dumper(bv):
         print('Name', nameStr)
         if currentOwningType.hType == HandleType.TypeDefinition:
             typeDefinition = TypeDefinitionHandle(currentOwningType).GetTypeDefinition(metadata_reader)
-            print('Owning type', typeDefinition.name.GetConstantStringValue(metadata_reader))
+            owning_type = typeDefinition.get_name(metadata_reader)
+            print('Owning type', owning_type)
         elif currentOwningType.hType == HandleType.TypeReference:
-            print('Type reference')
+            typeReference = TypeReferenceHandle(currentOwningType).GetTypeReference(metadata_reader)
+            owning_type = typeReference.get_name(metadata_reader)
+            print('Owning type', typeReference.get_name(metadata_reader))
         elif currentOwningType.hType == HandleType.TypeSpecification:
-        print('Type specification')
-            
-        #print('Owning Type')
+            typeSpecifiction = TypeSpecificationHandle(currentOwningType).GetTypeSpecification(metadata_reader)
+            owning_type = typeSpecifiction.get_name(metadata_reader)
+            print('Type specification', owning_type)
         bv.add_function(pMethod) # add funciton if one doesn't already exist at pMethod
         func = bv.get_function_at(pMethod)
         if func:
-            print(func.name)
-            #func.name = str(nameStr)
+            #if func.name.startswith('sub_'):
+            func.name = f'{owning_type}::{str(nameStr)}' #don't replace debugging/user generated names
+            #print(func.name)
         else:
             print('No function found at address', pMethod)

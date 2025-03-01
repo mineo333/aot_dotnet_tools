@@ -64,7 +64,7 @@ class InvokeTableFlags(IntEnum):
     FastCall = 0x00005000
     CallingConventionMask = 0x00007000
     
-    
+#https://github.com/dotnet/runtime/blob/e52cfdbea428e65307c40586e3e308aeed385e86/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderCommonGen.cs#L87
 class HandleType(IntEnum):
     Null = 0x0
     ArraySignature = 0x1

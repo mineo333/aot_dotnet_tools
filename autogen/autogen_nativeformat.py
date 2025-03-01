@@ -49,7 +49,6 @@ Looking in the ReaderGen, there are a few "classes" of reads that exist. Firstly
 
 On top of that most Handles and Collections have shared handling of data as well as, for the most part, the same members. For example, all handles will always have the top 8 bits be the hType and the bottom 24 bits be the offset. In addition, all types of a certain "class" have the same constructor. 
 
-
 HOW WE TRANSLATE AUTOGEN:
 
 The way autogen works is that, for every type, it generates an extension Read method that outputs that type. The way the Read works depends on the underlying "flavor" of type (i.e., Handle, Collection, Enum). However, the read is the same for any particular flavor. The only difference is the output type.
@@ -87,7 +86,7 @@ class NativeFormatHandle:
 
     @property
     def Offset(self):
-        return self._value & 0xffffff
+        return s32(self._value & 0xffffff)
     
     #This method should NEVER be called directly. Instead, it should be called by a subclass
     #Pulled from https://github.com/dotnet/runtime/blob/e133fe4f5311c0397f8cc153bada693c48eb7a9f/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L101
@@ -157,6 +156,16 @@ class Handle(NativeFormatHandle):
     def Read(reader, offset):
         return NativeFormatHandle.Read(reader, offset, __class__)
 
+
+class HandleCollection(NativeFormatCollection):
+    def __init__(self, reader, offset):
+        super().__init__(reader, offset)
+    
+    def Read(reader, offset):
+        return NativeFormatCollection.Read(reader, offset, __class__)
+    
+    def GetEnumerator(self):
+        return NativeFormatCollection.Enumerator(self.reader, self.offset, Handle)
 
 '''
 ------ScopeDefinition------
@@ -325,6 +334,9 @@ class TypeDefinition:
         #(offset, self.properties) = PropertyHandleCollection.Read(streamReader, offset)
         #(offset, self.events) = EventHandleCollection.Read(streamReader, offset)
         
+    def get_name(self, reader):
+        return self.name.GetConstantStringValue(reader)
+        
 
 '''
 Event
@@ -458,6 +470,356 @@ class ConstantStringValueHandle(NativeFormatHandle):
         return ConstantStringValue(metadataReader, self)
             
     
+
+'''
+------TypeReference------
+'''
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5153
+class TypeReferenceHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.TypeReference or self._hType == HandleType.Null
+
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+    
+    def GetTypeReference(self, reader):
+        return TypeReference(reader, self)
+    
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5130
+class TypeReference:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        streamReader = reader.streamReader
+        offset = handle.Offset
+        (offset, self.parentNameSpaceOrType) = Handle.Read(streamReader, offset)
+        (offset, self.typeName) = ConstantStringValueHandle.Read(streamReader, offset)
+        
+    def get_name(self, reader):
+        return self.typeName.GetConstantStringValue(reader)
+        
+
+'''
+TypeSpecification 
+
+A type specification seems to specify
+'''
+
+class TypeSpecificationHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.TypeSpecification or self._hType == HandleType.Null
+
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+
+    def GetTypeSpecification(self, reader):
+        return TypeSpecification(reader, self)
+
+
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5208
+class TypeSpecification:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        streamReader = reader.streamReader
+        offset = handle.Offset 
+        print('base', hex(streamReader.base + offset)) 
+        (offset, self.signature) = Handle.Read(streamReader, offset)
+        print('signature offset', hex(self.signature.Offset))
+    
+    #https://github.com/dotnet/runtime/blob/e52cfdbea428e65307c40586e3e308aeed385e86/src/coreclr/nativeaot/System.Private.StackTraceMetadata/src/Internal/StackTraceMetadata/MethodNameFormatter.cs#L208    
+    def get_name(self, reader):
+        # possible cases: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5224
+        match self.signature.hType:
+            case HandleType.TypeDefinition:
+                type_definition = TypeDefinitionHandle(self.signature).GetTypeDefinition(reader)
+                return type_definition.get_name(reader)
+            case HandleType.TypeReference:
+                type_reference = TypeReferenceHandle(self.signature).GetTypeReference(reader)
+                return type_reference.get_name(reader)
+            case HandleType.TypeInstantiationSignature:
+                type_instantiation = TypeInstantiationSignatureHandle(self.signature).GetTypeInstantiationSignature(reader)
+                return type_instantiation.get_name(reader)
+            case HandleType.SZArraySignature:
+                sz_array_sig = SZArraySignatureHandle(self.signature).GetSZArraySignature(reader)
+                return sz_array_sig.get_name(reader)
+            case HandleType.ArraySignature:
+                array_sig = ArraySignatureHandle(self.signature).GetArraySignature(reader)
+                return array_sig.get_name(reader)
+            case HandleType.PointerSignature:
+                pointer_sig = PointerSignatureHandle(self.signature).GetPointerSignature(reader)
+                return pointer_sig.get_name(reader)
+            case HandleType.ByReferenceSignature:
+                print('by ref offset:', hex(self.signature.Offset))
+                print('addr', hex(reader.streamReader.base + self.signature.Offset))
+                by_ref_sig = ByReferenceSignatureHandle(self.signature).GetByReferenceSignature(reader)
+                return by_ref_sig.get_name(reader)
+            case _:
+                raise Exception(f"Invalid handle type in {__class__} - {HandleType(self.signature.hType).name}")
+            
+
+    
+
+'''
+TypeInstantiationSignature
+'''
+
+class TypeInstantiationSignatureHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.TypeInstantiationSignature or self._hType == HandleType.Null
+
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+    
+    def GetTypeInstantiationSignature(self, reader):
+        return TypeInstantiationSignature(reader, self)
+    
+    
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5041
+class TypeInstantiationSignature:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        streamReader = reader.streamReader
+        offset = handle.Offset
+        (offset, self.genericType) = Handle.Read(streamReader, offset)
+        (offset, self.genericTypeArguments) = HandleCollection.Read(streamReader, offset)
+    
+    #https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L5058
+    def get_name(self, reader):
+        match self.genericType.hType:
+            case HandleType.TypeDefinition:
+                type_definition = TypeDefinitionHandle(self.genericType).GetTypeDefinition(reader)
+                return type_definition.get_name(reader)
+            case HandleType.TypeReference:
+                type_reference = TypeReferenceHandle(self.genericType).GetTypeReference(reader)
+                return type_reference.get_name(reader)
+            case HandleType.TypeSpecification:
+                type_spec = TypeSpecificationHandle(self.genericType).GetTypeSpecification(reader)
+                return type_spec.get_name(reader)
+            case _:
+                raise Exception(f"Invalid handle type in {__class__}")
+                
+'''
+ModifiedType
+'''                
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3613
+
+class ModifiedTypeHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.ModifiedType or self._hType == HandleType.Null
+    
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+    
+    def GetModifiedType(self, reader):
+        return ModifiedType(reader, self)
+
+class ModifiedType:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        streamReader = reader.streamReader
+        offset = handle.Offset
+        (offset, self.isOptional) = Boolean.Read(streamReader, offset)
+        (offset, self.modifierType) = Handle.Read(streamReader, offset)
+        (offset, self.type) = Handle.Read(streamReader, offset)
+    
+    #https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L3638
+    def get_name(self, reader):
+        match self.type.hType:
+            case HandleType.TypeDefinition:
+                type_definition = TypeDefinitionHandle(self.type).GetTypeDefinition(reader)
+                return type_definition.get_name(reader)
+            case HandleType.TypeReference:
+                type_reference = TypeReferenceHandle(self.type).GetTypeReference(reader)
+                return type_reference.get_name(reader)
+            case HandleType.TypeSpecification:
+                type_spec = TypeSpecificationHandle(self.type).GetTypeSpecification(reader)
+                return type_spec.get_name(reader)
+            case HandleType.ModifiedType:
+                mod_type = ModifiedTypeHandle(self.type).GetModifiedType(reader)
+                return mod_type.get_name(reader)
+            case _:
+                raise Exception(f"Invalid handle type in {__class__}")
+
+'''
+SZArraySignature
+'''  
+
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L4524C18-L4524C40
+class SZArraySignatureHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.SZArraySignature or self._hType == HandleType.Null
+    
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+    
+    def GetSZArraySignature(self, reader):
+        return SZArraySignature(reader, self)
+
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L4501
+class SZArraySignature:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        streamReader = reader.streamReader
+        offset = handle.Offset
+        (offset, self.elementType) = Handle.Read(streamReader, offset)
+
+    # cases: https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L4512
+    def get_name(self, reader):
+        match self.elementType.hType:
+            case HandleType.TypeDefinition:
+                type_definition = TypeDefinitionHandle(self.elementType).GetTypeDefinition(reader)
+                return f"{type_definition.get_name(reader)}[]"
+            case HandleType.TypeReference:
+                type_reference = TypeReferenceHandle(self.elementType).GetTypeReference(reader)
+                return f"{type_reference.get_name(reader)}[]"
+            case HandleType.TypeSpecification:
+                type_spec = TypeSpecificationHandle(self.elementType).GetTypeSpecification(reader)
+                return f"{type_spec.get_name(reader)}[]"
+            case HandleType.ModifiedType:
+                mod_type = ModifiedTypeHandle(self.elementType).GetModifiedType(reader)
+                return f"{mod_type.get_name(reader)}[]" 
+            case _:
+                raise Exception(f"Invalid handle type in {__class__}")
+            
+
+
+'''
+ArraySignature
+'''
+
+class ArraySignatureHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.ArraySignature or self._hType == HandleType.Null
+    
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+    
+    def GetArraySignature(self, reader):
+        return ArraySignature(reader, self)
+    
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L27
+class ArraySignature:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        streamReader = reader.streamReader
+        offset = handle.Offset
+        (offset, self.elementType) = Handle.Read(streamReader, offset)
+        (offset, self.rank) = Int32.Read(streamReader, offset)
+        (offset, self.sizes) = Int32Collection.Read(streamReader, offset)
+        (offset, self.lowerbounds) = Int32Collection.Read(streamReader, offset)
+        
+    def get_name(self, reader):
+        match self.elementType.hType:
+            case HandleType.TypeDefinition:
+                type_definition = TypeDefinitionHandle(self.elementType).GetTypeDefinition(reader)
+                return f"{type_definition.get_name(reader)}[]"
+            case HandleType.TypeReference:
+                type_reference = TypeReferenceHandle(self.elementType).GetTypeReference(reader)
+                return f"{type_reference.get_name(reader)}[]"
+            case HandleType.TypeSpecification:
+                type_spec = TypeSpecificationHandle(self.elementType).GetTypeSpecification(reader)
+                return f"{type_spec.get_name(reader)}[]"
+            case HandleType.ModifiedType:
+                mod_type = ModifiedTypeHandle(self.elementType).GetModifiedType(reader)
+                return f"{mod_type.get_name(reader)}[]" 
+            case _:
+                raise Exception(f"Invalid handle type in {__class__}")
+            
+'''
+PointerSignatureHandle
+'''
+
+class PointerSignatureHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.PointerSignature or self._hType == HandleType.Null
+    
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+
+    def GetPointerSignature(self, reader):
+        return PointerSignature(reader, self)
+
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L4066
+class PointerSignature:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        streamReader = reader.streamReader
+        offset = handle.Offset
+        
+        (offset, self.type) = Handle.Read(streamReader, offset)
+    
+    def get_name(self, reader):
+        match self.type.hType:
+            case HandleType.TypeDefinition:
+                type_definition = TypeDefinitionHandle(self.type).GetTypeDefinition(reader)
+                return f"{type_definition.get_name(reader)}*"
+            case HandleType.TypeReference:
+                type_reference = TypeReferenceHandle(self.type).GetTypeReference(reader)
+                return f"{type_reference.get_name(reader)}*"
+            case HandleType.TypeSpecification:
+                type_spec = TypeSpecificationHandle(self.type).GetTypeSpecification(reader)
+                return f"{type_spec.get_name(reader)}*"
+            case HandleType.ModifiedType:
+                mod_type = ModifiedTypeHandle(self.type).GetModifiedType(reader)
+                return f"{mod_type.get_name(reader)}*" 
+            case _:
+                raise Exception(f"Invalid handle type in {__class__}")
+
+
+'''
+ByReferenceSignature
+'''
+
+class ByReferenceSignatureHandle(NativeFormatHandle):
+    def __init__(self, value):
+        super().__init__(value)
+        assert self._hType == 0 or self._hType == HandleType.ByReferenceSignature or self._hType == HandleType.Null
+    
+    def Read(reader, offset):
+        return NativeFormatHandle.Read(reader, offset, __class__)
+
+    def GetByReferenceSignature(self, reader):
+        return ByReferenceSignature(reader, self)
+
+#https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/NativeFormatReaderGen.cs#L4066
+class ByReferenceSignature:
+    def __init__(self, reader, handle):
+        self.reader = reader
+        self.handle = handle
+        streamReader = reader.streamReader
+        
+        offset = handle.Offset
+        (offset, self.type) = Handle.Read(streamReader, offset)
+    def get_name(self, reader):
+        match self.type.hType:
+            case HandleType.TypeDefinition:
+                type_definition = TypeDefinitionHandle(self.type).GetTypeDefinition(reader)
+                return type_definition.get_name(reader)
+            case HandleType.TypeReference:
+                type_reference = TypeReferenceHandle(self.type).GetTypeReference(reader)
+                return type_reference.get_name(reader)
+            case HandleType.TypeSpecification:
+                type_spec = TypeSpecificationHandle(self.type).GetTypeSpecification(reader)
+                return type_spec.get_name(reader)
+            case HandleType.ModifiedType:
+                mod_type = ModifiedTypeHandle(self.type).GetModifiedType(reader)
+                return mod_type.get_name(reader)
+            case _:
+                raise Exception(f"Invalid handle type in {__class__}")
+
 
 '''
 ------MethodSignature------
