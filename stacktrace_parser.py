@@ -60,6 +60,7 @@ def stacktrace_metadata_dumper(bv):
             owning_type = typeReference.get_name(metadata_reader)
             print('Owning type', typeReference.get_name(metadata_reader))
         elif currentOwningType.hType == HandleType.TypeSpecification:
+            print('Type specification')
             typeSpecifiction = TypeSpecificationHandle(currentOwningType).GetTypeSpecification(metadata_reader)
             owning_type = typeSpecifiction.get_name(metadata_reader)
             print('Type specification', owning_type)

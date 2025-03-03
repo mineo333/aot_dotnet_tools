@@ -70,8 +70,8 @@ class NativeFormatHandle:
             self._hType = value._hType
             self._value = value._value
         else:
-            self._hType = HandleType(value >> 24)
-            self._value = (value & 0x00FFFFFF) | (HandleType.Method << 24)
+            self._hType = HandleType(s32(value) >> 24)
+            self._value = (value & 0x0FFFFFF)
 
     @property
     def value(self):
@@ -86,7 +86,7 @@ class NativeFormatHandle:
 
     @property
     def Offset(self):
-        return s32(self._value & 0xffffff)
+        return s32(self._value & 0x0FFFFFF)
     
     #This method should NEVER be called directly. Instead, it should be called by a subclass
     #Pulled from https://github.com/dotnet/runtime/blob/e133fe4f5311c0397f8cc153bada693c48eb7a9f/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/Generator/MdBinaryReaderGen.cs#L101
@@ -152,9 +152,10 @@ class Handle(NativeFormatHandle):
         else:
             super().__init__(value)
 
-    
+    #https://github.com/dotnet/runtime/blob/f72784faa641a52eebf25d8212cc719f41e02143/src/coreclr/tools/Common/Internal/Metadata/NativeFormat/MdBinaryReader.cs#L77
     def Read(reader, offset):
-        return NativeFormatHandle.Read(reader, offset, __class__)
+        (offset, value) = reader.DecodeUnsigned(offset)
+        return (offset, Handle(s32(value >> 8), hType=HandleType(s8(value))))
 
 
 class HandleCollection(NativeFormatCollection):
@@ -362,7 +363,6 @@ class FieldHandleCollection(NativeFormatCollection):
     def Read(reader, offset):
         return NativeFormatCollection.Read(reader, offset, __class__)
 
-    
 '''
 Parameter
 '''
@@ -525,9 +525,7 @@ class TypeSpecification:
         self.handle = handle
         streamReader = reader.streamReader
         offset = handle.Offset 
-        print('base', hex(streamReader.base + offset)) 
         (offset, self.signature) = Handle.Read(streamReader, offset)
-        print('signature offset', hex(self.signature.Offset))
     
     #https://github.com/dotnet/runtime/blob/e52cfdbea428e65307c40586e3e308aeed385e86/src/coreclr/nativeaot/System.Private.StackTraceMetadata/src/Internal/StackTraceMetadata/MethodNameFormatter.cs#L208    
     def get_name(self, reader):
@@ -552,8 +550,6 @@ class TypeSpecification:
                 pointer_sig = PointerSignatureHandle(self.signature).GetPointerSignature(reader)
                 return pointer_sig.get_name(reader)
             case HandleType.ByReferenceSignature:
-                print('by ref offset:', hex(self.signature.Offset))
-                print('addr', hex(reader.streamReader.base + self.signature.Offset))
                 by_ref_sig = ByReferenceSignatureHandle(self.signature).GetByReferenceSignature(reader)
                 return by_ref_sig.get_name(reader)
             case _:
